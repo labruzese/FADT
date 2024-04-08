@@ -52,6 +52,7 @@ private fun formatCSV(csv: CSV): CSV {
         }
 
         transformCategory(category, filterType)
+        //prevTeachers.clear() //If you want to reset the teacher numbers for each class
     }
 
     return CSV(csv.headers, newCategories)
@@ -70,17 +71,22 @@ private fun missingFilter(item: String): String? {
 }
 
 private fun siblingFilter(item: String): String? {
-    return when {
-        item.toIntOrNull() != null -> item
-        else -> null
-    }
+    val count = item.toIntOrNull()
+
+    if((0..2).contains(count)) return count.toString()
+    if((0..Int.MAX_VALUE).contains(count)) return "More than 2"
+
+    return null
 }
 
 private fun dobFilter(item: String): String? {
-    return when {
-        item.toIntOrNull() != null && (0..12).contains(item.toInt()) -> item
-        else -> null
-    }
+    val month = item.toIntOrNull()
+
+    if((0..4).contains(month)) return "Jan-Apr"
+    if((5..8).contains(month)) return "May-Aug"
+    if((9..12).contains(month)) return "Sep-Dec"
+
+    return null
 }
 
 private fun lpFilter(item: String): String? {
@@ -115,6 +121,8 @@ private fun gradeFilter(item: String): String? {
     newItem = newItem.removeSuffix("-")
 
     if(newItem.length != 1) return null
+
+    if(newItem[0] >= 'C') return "C or worse"
 
     return newItem
 }
