@@ -1,13 +1,14 @@
 module CSVLoader
 (loadCategoryTable,
 names,
+numCategories,
+numEntries,
 successColumn,
 CategoryTable()
 ) where
 
 import System.IO
-import Data.List (isInfixOf, transpose)
-import Control.Monad (when)
+import Data.List (isInfixOf, transpose, nub)
 
 --An array of categories in the format CategoryTable[category][data point]
     --The first column consists of unique category names
@@ -16,6 +17,15 @@ type CategoryTable = [[String]]
 
 names :: CategoryTable -> [String]
 names = map head
+
+numCategories :: CategoryTable -> Int
+numCategories = length
+
+numEntries :: CategoryTable -> Int
+numEntries = length . tail . head
+
+bins :: Int -> CategoryTable -> [String]
+bins index ct = nub . (index !! ct)
 
 successColumn :: CategoryTable -> [Bool]
 successColumn  = map read . head
@@ -53,13 +63,15 @@ filterType :: String -> (String -> String)
 filterType header
     | "CS Req Grade" `isInfixOf` header = successBool
     | "Grade" `isInfixOf` header = gradeFilter
-    -- | "Teacher" `isInfixOf` header = teacherFilter
+    | "Teacher" `isInfixOf` header = teacherFilter
     -- | "Level" `isInfixOf` header = levelFilter
     -- | "World Language" `isInfixOf` header = wlFilter
     -- | "LP" `isInfixOf` header = lpFilter
     -- | "Birth Month" `isInfixOf` header = dobFilter
     -- | "Siblings" `isInfixOf` header = siblingFilter
     | otherwise = id
+
+
 
 successBool :: String -> String
 successBool grade

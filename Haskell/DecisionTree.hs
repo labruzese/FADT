@@ -1,6 +1,15 @@
 import CSVLoader
 import GHC.Float (log1pDouble)
+import GHC.Generics (D)
 
+informationGain :: Int -> Int -> CategoryTable -> Double
+informationGain tableEntropy category table = tableEntropy - entropyRemainingAfterTest category table
+
+entropyRemainingAfterTest :: Int -> CategoryTable -> Double
+entropyRemainingAfterTest colNum ct = 
+
+bestEntropy :: CategoryTable -> [String]
+bestEntropy catTable = max $ mapWithIndex (\i -> entropyRemainingAfterTest i catTable) catTable
 
 totalEntropy :: CategoryTable -> Double
 totalEntropy ct = entropyOfBernoulliVariable $ fromIntegral trueCount / fromIntegral totalCount
