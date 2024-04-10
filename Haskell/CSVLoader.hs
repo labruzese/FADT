@@ -1,12 +1,30 @@
+module CSVLoader
+(loadCategoryTable,
+names,
+successColumn,
+CategoryTable()
+) where
+
 import System.IO
-import Data.List (isInfixOf)
+import Data.List (isInfixOf, transpose)
+import Control.Monad (when)
 
-loadCategories :: FilePath -> IO [[String]]
-loadCategories path = do
+--An array of categories in the format CategoryTable[category][data point]
+    --The first column consists of unique category names
+    --The first row consists of either "True" or "False" except for the first itme which is the category name
+type CategoryTable = [[String]]
+
+names :: CategoryTable -> [String]
+names = map head
+
+successColumn :: CategoryTable -> [Bool]
+successColumn  = map read . head
+
+--Loads the CategoryTable from a file path
+loadCategoryTable :: FilePath -> IO CategoryTable
+loadCategoryTable path = do
     content <- readFile path
-    return $ formatCategories $ formatMissing $ invertTable $ map (splitOn ',') (lines content)
-
-
+    return $ formatCategories . formatMissing . transpose $ map (splitOn ',') (lines content)
 
 splitOn :: Char -> String -> [String]
 splitOn _ [] = []
@@ -14,15 +32,27 @@ splitOn delim xs = case break (== delim) xs of
     (before, []) -> [before]
     (before, _:ys) -> before : splitOn delim ys
 
-invertTable :: [[a]] -> [[a]]
-invertTable [] = []
-invertTable ([]:_) = []
-invertTable matrix = map head matrix : invertTable (map tail matrix)
 
---Header to transform to string
+--      ~Overall Filters~
+missingFilter :: String -> String
+missingFilter "MISSING" = "N/A"
+missingFilter str = str
+
+--Applies the missing filter
+formatMissing :: CategoryTable -> CategoryTable
+formatMissing = map (map missingFilter . tail)
+
+
+--      ~Specific Filters~
+--Applies specific filters to each category
+formatCategories :: CategoryTable -> CategoryTable
+formatCategories = map (\cat -> map (filterType (head cat)) (tail cat))
+
+--Gets the specific filters for a category
 filterType :: String -> (String -> String)
 filterType header
-    | "Grade" `isInfixOf` header || "Q1" `isInfixOf` header = gradeFilter
+    | "CS Req Grade" `isInfixOf` header = successBool
+    | "Grade" `isInfixOf` header = gradeFilter
     -- | "Teacher" `isInfixOf` header = teacherFilter
     -- | "Level" `isInfixOf` header = levelFilter
     -- | "World Language" `isInfixOf` header = wlFilter
@@ -31,26 +61,23 @@ filterType header
     -- | "Siblings" `isInfixOf` header = siblingFilter
     | otherwise = id
 
-missingFilter :: String -> String
-missingFilter str
-    | str == "MISSING" = "N/A"
-    | otherwise = str
-
-formatMissing :: [[String]] -> [[String]]
-formatMissing = map (map missingFilter . tail)
+successBool :: String -> String
+successBool grade
+    | "A" `isInfixOf` grade = "True"
+    | grade == "B+" = "True"
+    | otherwise = "False"
 
 gradeFilter :: String -> String
-gradeFilter item
-    | strippedItem > 'C' = "C or worse"
-    | otherwise = [strippedItem]
-    where strippedItem = head $ item `removeSuffix` '+' `removeSuffix` '-'
+gradeFilter grade
+    | strippedGrade > 'C' = "C or worse"
+    | otherwise = [strippedGrade]
+    where strippedGrade = head $ grade `removeSuffix` '+' `removeSuffix` '-'
 
-
+--Removes the given suffix if found
 removeSuffix :: String -> Char -> String
 removeSuffix [] _ = []
 removeSuffix str c
     | c == last str = init str
     | otherwise = str
 
-formatCategories :: [[String]] -> [[String]]
-formatCategories = map (\cat -> map (filterType (head cat)) (tail cat))
+main = loadCategoryTable "dtd.csv"
