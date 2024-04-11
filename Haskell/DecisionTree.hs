@@ -2,11 +2,22 @@ import CSVLoader
 import GHC.Float (log1pDouble)
 import GHC.Generics (D)
 
-informationGain :: Int -> Int -> CategoryTable -> Double
+--Reduction in entropy due to testing a category(might not be needed)
+informationGain :: Double -> Int -> CategoryTable -> Double
 informationGain tableEntropy category table = tableEntropy - entropyRemainingAfterTest category table
 
+--The entropy after testing a category
 entropyRemainingAfterTest :: Int -> CategoryTable -> Double
-entropyRemainingAfterTest colNum ct = 
+entropyRemainingAfterTest colNum ct = sum . map $ (\b -> occurences (b bins)) bins
+    where 
+        bins = binFromIndex colNum ct
+
+binEntropy :: String -> [String] -> Double
+binEntropy bin bins 
+        
+
+occurences :: String -> [String] -> Int
+occurences match = length . filter (== match)
 
 bestEntropy :: CategoryTable -> [String]
 bestEntropy catTable = max $ mapWithIndex (\i -> entropyRemainingAfterTest i catTable) catTable

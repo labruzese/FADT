@@ -3,6 +3,7 @@ module CSVLoader
 names,
 numCategories,
 numEntries,
+binFromIndex,
 successColumn,
 CategoryTable()
 ) where
@@ -24,8 +25,14 @@ numCategories = length
 numEntries :: CategoryTable -> Int
 numEntries = length . tail . head
 
-bins :: Int -> CategoryTable -> [String]
-bins index ct = nub . (index !! ct)
+--For every datapoint, if
+
+bins :: Int -> CategoryTable -> [(String, [Bool])]
+bins 
+
+--pk + nk
+binFromIndex :: Int -> CategoryTable -> [String]
+binFromIndex index = nub . tail . (!! index)
 
 successColumn :: CategoryTable -> [Bool]
 successColumn  = map read . head
