@@ -3,24 +3,28 @@ import GHC.Float (log1pDouble)
 import GHC.Generics (D)
 
 --Reduction in entropy due to testing a category(might not be needed)
-informationGain :: Double -> Int -> CategoryTable -> Double
-informationGain tableEntropy category table = tableEntropy - entropyRemainingAfterTest category table
+--informationGain :: Double -> Int -> CategoryTable -> Double
+--informationGain tableEntropy category table = tableEntropy - entropyRemainingAfterTest category table
 
 --The entropy after testing a category
 entropyRemainingAfterTest :: Int -> CategoryTable -> Double
-entropyRemainingAfterTest colNum ct = sum . map $ (\b -> occurences (b bins)) bins
-    where 
-        bins = binFromIndex colNum ct
+entropyRemainingAfterTest colNum ct = sum $ map (`binEntropy` n) bs
+    where
+        bs = bins colNum ct
+        n = numEntries ct
 
-binEntropy :: String -> [String] -> Double
-binEntropy bin bins 
-        
+binEntropy :: Bin -> Int -> Double
+binEntropy bin numEntries = entropyOfBernoulliVariable (pCount/nBin) * nBin / nTotal
+    where
+        pCount = fromIntegral $ successCount bin
+        nBin = fromIntegral $ count bin
+        nTotal = fromIntegral numEntries
 
 occurences :: String -> [String] -> Int
 occurences match = length . filter (== match)
 
-bestEntropy :: CategoryTable -> [String]
-bestEntropy catTable = max $ mapWithIndex (\i -> entropyRemainingAfterTest i catTable) catTable
+--bestEntropy :: CategoryTable -> [String]
+--bestEntropy catTable = max $ mapWithIndex (\i -> entropyRemainingAfterTest i catTable) catTable
 
 totalEntropy :: CategoryTable -> Double
 totalEntropy ct = entropyOfBernoulliVariable $ fromIntegral trueCount / fromIntegral totalCount
