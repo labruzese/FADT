@@ -3,13 +3,23 @@ module CSVLoader
 names,
 numCategories,
 numEntries,
+Bin,
+catName,
+successCount,
+failCount,
+count,
+bins,
 binFromIndex,
 successColumn,
 CategoryTable()
 ) where
 
 import System.IO
-import Data.List (isInfixOf, transpose, nub)
+import Data.Map.Strict (insertWith, Map, singleton, toList)
+import qualified Data.Map.Strict as Map
+
+import Data.List (isInfixOf, transpose, nub, foldl')
+import Data.Bool
 
 --An array of categories in the format CategoryTable[category][data point]
     --The first column consists of unique category names
@@ -25,12 +35,33 @@ numCategories = length
 numEntries :: CategoryTable -> Int
 numEntries = length . tail . head
 
---For every datapoint, if
+data Bin = Bin { catName :: String
+                , successCount :: Int
+                , failCount :: Int
+                } deriving (Show)
 
-bins :: Int -> CategoryTable -> [(String, [Bool])]
-bins 
+count :: Bin -> Int
+count b = successCount b + failCount b
 
---pk + nk
+--Given a column index and category table, return a list of bins
+bins :: Int -> CategoryTable -> [Bin]
+bins index ct = map snd (toList hashMap)
+    where
+        hashMap = foldl' insertToHashmap Map.empty kvs
+
+        kvs :: [(String, Bin)]
+        kvs = zipWith pairKV (tail $ ct !! index) (tail $ successColumn ct)
+
+        pairKV :: String -> Bool -> (String, Bin)
+        pairKV s b = (s, Bin s (bool 1 0 b) (bool 0 1 b))
+
+insertToHashmap :: Map String Bin -> (String, Bin) -> Map String Bin
+insertToHashmap m (k,v) = insertWith adder k v m
+    where
+        adder :: Bin -> Bin -> Bin
+        adder new old = Bin (catName new) (successCount new + successCount old) (failCount new + failCount old)
+
+--delete
 binFromIndex :: Int -> CategoryTable -> [String]
 binFromIndex index = nub . tail . (!! index)
 
@@ -70,7 +101,7 @@ filterType :: String -> (String -> String)
 filterType header
     | "CS Req Grade" `isInfixOf` header = successBool
     | "Grade" `isInfixOf` header = gradeFilter
-    | "Teacher" `isInfixOf` header = teacherFilter
+    -- | "Teacher" `isInfixOf` header = teacherFilter
     -- | "Level" `isInfixOf` header = levelFilter
     -- | "World Language" `isInfixOf` header = wlFilter
     -- | "LP" `isInfixOf` header = lpFilter
