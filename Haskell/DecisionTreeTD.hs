@@ -1,21 +1,15 @@
 import CSVLoader
-import Data.Graph (Tree)
-import Data.List
-import Data.List
-import Data.Tree (unfoldTreeM_BF)
+import Data.List ( maximumBy, elemIndex, nub, transpose )
 import Data.Foldable (maximumBy)
-import Control.Monad.State
 import Data.Function (on)
-import Data.Maybe (fromMaybe)
-import GHC.Float (log1pDouble)
-
+import Data.Ord (comparing)
 
 data NodeData = Question String | Answer Bool
 
 data Edge = Edge { label :: String, destination :: Node }
 data Node = Node { nodeData :: NodeData, edges :: [Edge] }
 
---Current CT with a list of previous CTs and the answer it came from -> A list of the next levels Nodes and previous category take
+--DECISION TREE MAIN--
 
 decisionTree :: [CategoryTable] -> Node
 decisionTree (currCT : prevCTS)
@@ -25,17 +19,12 @@ decisionTree (currCT : prevCTS)
     | otherwise = Node (Question $ head bestCategory) (zipWith edgeCreator (featuresIn bestCategory) (subsets bestCategory currCT))
     where
         plurityValue category = Node (Answer $ mostFrequentItem $ successColumn category) []
-        bestCategory = maximumBy (importance currCT) currCT
+        bestCategory = maximumBy (comparing $ importance currCT) currCT
         bestCategoryID = findIndexInList bestCategory currCT
         edgeCreator label newCTS = Edge label $ decisionTree (newCTS : prevCTS)
 
-
 subsets :: Category -> CategoryTable -> [CategoryTable]
 subsets cat ct = map (\x -> subset ct x (findIndexInList cat ct)) (featuresIn cat)
-
-importance :: CategoryTable -> Category -> Double
-importance ct cat = entropyOfBool pGoal - remainingEntropy cat
-    where pGoal = posExamples ct / (posExamples ct + negExamples ct)
 
 subset :: CategoryTable -> String -> Int -> CategoryTable
 subset ct feature categoryID = transpose $ filter (\example -> example !! categoryID /= feature) exampleTable
@@ -44,7 +33,33 @@ subset ct feature categoryID = transpose $ filter (\example -> example !! catego
 featuresIn :: Category -> [String]
 featuresIn cat = nub $ tail cat
 
+--ENTROPY--
 
+importance :: CategoryTable -> Category -> Double
+importance ct cat = entropyOfBool pGoal - remainingEntropy ct cat
+    where 
+        pGoal = p / (p+n)
+        p = fromIntegral $ posExamples ct
+        n = fromIntegral $ negExamples ct
+
+remainingEntropy :: CategoryTable -> Category -> Double
+remainingEntropy ct cat = sum $ map (\s -> proportionRemaining s * entropyOfBool (propSuccess s)) (subsets cat ct)
+    where
+        proportionRemaining sub = examples sub / examples ct
+        propSuccess sub = p sub / examples ct
+        p ctable = fromIntegral $ posExamples ctable
+        examples ctable = fromIntegral $ numEntries ctable
+
+entropyOfBool :: Double -> Double
+entropyOfBool 0 = 0
+entropyOfBool 1 = 1
+entropyOfBool probability = -( sum $ map entropyOfVar [probability, 1-probability] )
+    where
+        entropyOfVar x = x * log2 x
+        log2 = logBase 2
+
+
+--HELPERS--
 
 findIndexInList :: Eq a => a -> [a] -> Int
 findIndexInList x xs =
@@ -56,30 +71,3 @@ mostFrequentItem :: (Eq a) => [a] -> a
 mostFrequentItem (x:xs) = fst $ maximumBy (compare `on` snd) $ map (\y -> (y, count y (x:xs))) (x:xs)
     where
         count x = length . filter (== x)
-
-entropyOfBool :: Double -> Double
-entropyOfBool 0 = 0
-entropyOfBool 1 = 1
-entropyOfBool probability = -sum $ map entropyOfVar [probability, 1-probability]
-    where 
-        entropyOfVar x = x * log2 x
-        log2 = logBase 2
-
-remainingEntropy :: CategoryTable -> Category -> Double
-remainingEntropy ct cat = sum $ map (\subset -> proportionRemaining subset ct * entropyOfBool $ propPos subset) subsets
-    where 
-        proportionRemaining subset = numEntries subset / numEntries ct
-        propPos ct = posExamples / numEntries ct
-entropyOfBool :: Double -> Double
-entropyOfBool 0 = 0
-entropyOfBool 1 = 1
-entropyOfBool probability = -sum $ map entropyOfVar [probability, 1-probability]
-    where 
-        entropyOfVar x = x * log2 x
-        log2 = logBase 2
-
-remainingEntropy :: CategoryTable -> Category -> Double
-remainingEntropy ct cat = sum $ map (\subset -> proportionRemaining subset ct * entropyOfBool $ propPos subset) subsets
-    where 
-        proportionRemaining subset = numEntries subset / numEntries ct
-        propPos ct = posExamples / numEntries ct
