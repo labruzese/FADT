@@ -3,15 +3,11 @@ module CSVLoader
 names,
 numCategories,
 numEntries,
-Bin,
-catName,
-successCount,
-failCount,
-count,
-bins,
-binFromIndex,
 successColumn,
-CategoryTable()
+posExamples,
+negExamples,
+CategoryTable(),
+Category()
 ) where
 
 import System.IO
@@ -25,6 +21,7 @@ import Data.Bool
     --The first column consists of unique category names
     --The first row consists of either "True" or "False" except for the first itme which is the category name
 type CategoryTable = [[String]]
+type Category = [String]
 
 names :: CategoryTable -> [String]
 names = map head
@@ -34,36 +31,6 @@ numCategories = length
 
 numEntries :: CategoryTable -> Int
 numEntries = length . tail . head
-
-data Bin = Bin { catName :: String
-                , successCount :: Int
-                , failCount :: Int
-                } deriving (Show)
-
-count :: Bin -> Int
-count b = successCount b + failCount b
-
---Given a column index and category table, return a list of bins
-bins :: Int -> CategoryTable -> [Bin]
-bins index ct = map snd (toList hashMap)
-    where
-        hashMap = foldl' insertToHashmap Map.empty kvs
-
-        kvs :: [(String, Bin)]
-        kvs = zipWith pairKV (tail $ ct !! index) (tail $ successColumn ct)
-
-        pairKV :: String -> Bool -> (String, Bin)
-        pairKV s b = (s, Bin s (bool 1 0 b) (bool 0 1 b))
-
-insertToHashmap :: Map String Bin -> (String, Bin) -> Map String Bin
-insertToHashmap m (k,v) = insertWith adder k v m
-    where
-        adder :: Bin -> Bin -> Bin
-        adder new old = Bin (catName new) (successCount new + successCount old) (failCount new + failCount old)
-
---delete
-binFromIndex :: Int -> CategoryTable -> [String]
-binFromIndex index = nub . tail . (!! index)
 
 successColumn :: CategoryTable -> [Bool]
 successColumn  = map read . head
@@ -129,5 +96,15 @@ removeSuffix [] _ = []
 removeSuffix str c
     | c == last str = init str
     | otherwise = str
+
+posExamples :: CategoryTable -> Int
+posExamples ct = count True $ successColumn ct
+    where
+        count x = length . filter (== x)
+
+negExamples :: CategoryTable -> Int
+negExamples ct = count False $ successColumn ct
+    where
+        count x = length . filter (== x)
 
 main = loadCategoryTable "dtd.csv"
