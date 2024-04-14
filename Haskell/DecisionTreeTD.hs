@@ -1,6 +1,7 @@
 import CSVLoader
 import Data.Graph (Tree)
 import Data.List
+import Data.List
 import Data.Tree (unfoldTreeM_BF)
 import Data.Foldable (maximumBy)
 import Control.Monad.State
@@ -56,6 +57,19 @@ mostFrequentItem (x:xs) = fst $ maximumBy (compare `on` snd) $ map (\y -> (y, co
     where
         count x = length . filter (== x)
 
+entropyOfBool :: Double -> Double
+entropyOfBool 0 = 0
+entropyOfBool 1 = 1
+entropyOfBool probability = -sum $ map entropyOfVar [probability, 1-probability]
+    where 
+        entropyOfVar x = x * log2 x
+        log2 = logBase 2
+
+remainingEntropy :: CategoryTable -> Category -> Double
+remainingEntropy ct cat = sum $ map (\subset -> proportionRemaining subset ct * entropyOfBool $ propPos subset) subsets
+    where 
+        proportionRemaining subset = numEntries subset / numEntries ct
+        propPos ct = posExamples / numEntries ct
 entropyOfBool :: Double -> Double
 entropyOfBool 0 = 0
 entropyOfBool 1 = 1
