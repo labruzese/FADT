@@ -7,7 +7,8 @@ successColumn,
 posExamples,
 negExamples,
 CategoryTable(),
-Category()
+Category(),
+main
 ) where
 
 import System.IO
@@ -55,13 +56,13 @@ missingFilter str = str
 
 --Applies the missing filter
 formatMissing :: CategoryTable -> CategoryTable
-formatMissing = map (map missingFilter . tail)
+formatMissing = map (map missingFilter)
 
 
 --      ~Specific Filters~
 --Applies specific filters to each category
 formatCategories :: CategoryTable -> CategoryTable
-formatCategories = map (\cat -> map (filterType (head cat)) (tail cat))
+formatCategories = map (\cat -> head cat : map (filterType (head cat)) (tail cat))
 
 --Gets the specific filters for a category
 filterType :: String -> (String -> String)
