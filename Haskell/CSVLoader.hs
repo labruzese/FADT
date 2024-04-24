@@ -16,28 +16,44 @@ successCount,
 failCount,
 count,
 bins,
-CategoryTable()
+CategoryTable(),
+Example,
+pullExample,
+pullExamples,
+testExample,
+testMaybeExample
 ) where
 
 import System.IO
-import Data.List
+import Data.List ( foldl', (\\), isInfixOf, nub, transpose )
 import Data.Map.Strict (insertWith, Map, singleton, toList)
 import qualified Data.Map.Strict as Map
 import Data.Bool
+import Debug.Trace
+import Distribution.Compat.Prelude (readMaybe)
+import Data.Maybe (isNothing)
 
---An array of categories in the format CategoryTable[category][data point]
-    --The first column consists of unique category names
+--An array of categories in the format CategoryTable[category][Examples]
     --The first row consists of either "True" or "False" except for the first itme which is the category name
+    --The first column consists of unique category names
 type CategoryTable = [[String]]
 
 names :: CategoryTable -> [String]
 names = map head
 
+-- name :: Int -> CategoryTable -> String
+-- name i ct =
+--     trace ( "\nInput index: " ++ show i ++
+--             "\nInput category table: " ++ show ct ++
+--             "\nResult: " ++ result) result
+--     where
+--         result = head (ct !! i)
+
 name :: Int -> CategoryTable -> String
 name i ct = head $ ct !! i
 
 numCategories :: CategoryTable -> Int
-numCategories = length
+numCategories ct = length ct - 1
 
 numEntries :: CategoryTable -> Int
 numEntries = length . tail . head
@@ -47,7 +63,7 @@ removeCategory name = filter (\cat -> head cat /= name)
 
 keepEntries :: [Int] -> CategoryTable -> CategoryTable
 keepEntries keepIndices ct = removeEntries removeIndices ct
-    where removeIndices = [0..(length ct)] \\ keepIndices
+    where removeIndices = [1..(length ct)] \\ keepIndices
 
 removeEntries :: [Int] -> CategoryTable -> CategoryTable
 removeEntries indices = map (removeIndices indices)
@@ -70,9 +86,14 @@ removeAtIndex n (x:xs)
     | n == 0    = xs
     | otherwise = x : removeAtIndex (n-1) xs
 
+--Returns the success Column minus its category header
 successColumn :: CategoryTable -> [Bool]
-successColumn  = map read . head
+successColumn ct = map read (tail $ head ct)
 
+--Looks at the entire table and returns 
+--  Just False if everything is false
+--  Just True if everything is true
+--  Nothing if there is a mix
 tableValue :: CategoryTable -> Maybe Bool
 tableValue ct
     | numTrue == 0 = Just False
@@ -98,7 +119,7 @@ bins catIndex ct = map snd (toList hashMap)
 
         --Pairs of bin names and success bool
         kvs :: [(String, Bin)]
-        kvs = zipWith3 pairKV (tail $ ct !! catIndex) (tail $ successColumn ct) [0..]
+        kvs = zipWith3 pairKV (tail $ ct !! catIndex) (successColumn ct) [1..] -- (cat responses, success bool, entry index(starting at 1))
 
         pairKV :: String -> Bool -> Int -> (String, Bin)
         pairKV s b i = (s, Bin [i] s (bool 1 0 b) (bool 0 1 b))
@@ -125,7 +146,7 @@ binValue _           = Nothing
 loadCategoryTable :: FilePath -> IO CategoryTable
 loadCategoryTable path = do
     content <- readFile path
-    return $ formatCategories . formatMissing . transpose $ map (splitOn ',') (lines content)
+    return . formatCategories . formatMissing . transpose $ map (splitOn ',') (lines content)
 
 splitOn :: Char -> String -> [String]
 splitOn _ [] = []
@@ -135,34 +156,37 @@ splitOn delim xs = case break (== delim) xs of
 
 
 --      ~Overall Filters~
+missing = "N/A"
+
 missingFilter :: String -> String
-missingFilter "MISSING" = "N/A"
+missingFilter "MISSING" = missing
 missingFilter str = str
 
 --Applies the missing filter
 formatMissing :: CategoryTable -> CategoryTable
-formatMissing = map (map missingFilter . tail)
+formatMissing = map (map missingFilter)
 
 
 --      ~Specific Filters~
 --Applies specific filters to each category
 formatCategories :: CategoryTable -> CategoryTable
-formatCategories = map (\cat -> map (filterType (head cat)) (tail cat))
+formatCategories = map (\cat ->
+    let catName = head cat
+    in catName : map (filterType catName) (drop 1 cat))
 
 --Gets the specific filters for a category
 filterType :: String -> (String -> String)
 filterType header
     | "CS Req Grade" `isInfixOf` header = successBool
     | "Grade" `isInfixOf` header = gradeFilter
-    -- | "Teacher" `isInfixOf` header = teacherFilter
+    | "Teacher" `isInfixOf` header = teacherFilter
     -- | "Level" `isInfixOf` header = levelFilter
     -- | "World Language" `isInfixOf` header = wlFilter
     -- | "LP" `isInfixOf` header = lpFilter
-    -- | "Birth Month" `isInfixOf` header = dobFilter
-    -- | "Siblings" `isInfixOf` header = siblingFilter
+    | "Abs+Tardies" `isInfixOf` header = abstFilter
+    | "Birth Month" `isInfixOf` header = birthMonthFilter
+    | "Siblings" `isInfixOf` header = siblingFilter
     | otherwise = id
-
-
 
 successBool :: String -> String
 successBool grade
@@ -172,9 +196,43 @@ successBool grade
 
 gradeFilter :: String -> String
 gradeFilter grade
-    | strippedGrade > 'C' = "C or worse"
+    | null grade = missing
+    | grade == missing = missing
+    | strippedGrade >= 'C' = "C or worse"
     | otherwise = [strippedGrade]
-    where strippedGrade = head $ grade `removeSuffix` '+' `removeSuffix` '-'
+    where strippedGrade = head grade
+
+teacherFilter :: String -> String
+teacherFilter = take 4
+
+abstFilter :: String -> String
+abstFilter count =
+        case readMaybe count of
+        Nothing -> missing
+        Just m ->
+            if m < 10
+                then "Few"
+            else if m > 10
+                then "Many"
+            else missing
+
+birthMonthFilter :: String -> String
+birthMonthFilter month =
+    case readMaybe month of
+        Nothing -> missing
+        Just m ->
+            if m `elem` [9..12]
+                then "Early"
+            else if m `elem` [1..4]
+                then "Middle"
+            else if m `elem` [5..8]
+                then "Late"
+            else missing
+
+siblingFilter :: String -> String
+siblingFilter "0" = "0"
+siblingFilter "1" = "1"
+siblingFilter _ = "2+"
 
 --Removes the given suffix if found
 removeSuffix :: String -> Char -> String
@@ -183,4 +241,29 @@ removeSuffix str c
     | c == last str = init str
     | otherwise = str
 
-main = loadCategoryTable "dtd.csv"
+purgeExampleIf :: CategoryTable -> ([String] -> Bool) -> CategoryTable
+purgeExampleIf ct f = transpose $ head flipped : filter f (tail flipped)
+    where flipped = transpose ct
+--      ~Testing examples~
+type Example = [(String, String)] --[(Question, Response)]
+
+--Examples start at index 0
+pullExample :: CategoryTable -> Int -> Example
+pullExample ct index = zip (head transposedTable) (exampleData transposedTable index)
+    where transposedTable = transpose ct
+
+pullExamples :: CategoryTable -> [Int] -> [Example]
+pullExamples ct = map (zip (head transposedTable) . exampleData transposedTable)
+    where transposedTable = transpose ct
+
+exampleData :: CategoryTable -> Int -> [String]
+exampleData transposedTable index = transposedTable !! (index + 1)
+
+--Given an example and decision, checks if the decision is correct
+testExample :: Example -> Bool -> Bool
+testExample ex decision = decision == trueResult
+    where trueResult = read $ snd (head ex)
+
+testMaybeExample :: Example -> Maybe Bool -> Maybe Bool
+testMaybeExample ex Nothing = Nothing
+testMaybeExample ex (Just b) = Just $ testExample ex b
