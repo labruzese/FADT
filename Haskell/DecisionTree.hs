@@ -1,44 +1,33 @@
 import CSVLoader
-import GHC.Float (log1pDouble)
-import GHC.Generics (D)
+import Data.Tree
+import Data.Time (CalendarDiffTime(ctMonths))
+import Entropy
 
---Reduction in entropy due to testing a category(might not be needed)
---informationGain :: Double -> Int -> CategoryTable -> Double
---informationGain tableEntropy category table = tableEntropy - entropyRemainingAfterTest category table
+data DTNodeValue = Question String | Decision Bool deriving (Show)
+type DTResponse = Maybe String
+data DTNode = DTNode { response :: DTResponse
+                , value :: DTNodeValue
+                } deriving (Show)
 
---The entropy after testing a category
-entropyRemainingAfterTest :: Int -> CategoryTable -> Double
-entropyRemainingAfterTest colNum ct = sum $ map (`binEntropy` n) bs
-    where
-        bs = bins colNum ct
-        n = numEntries ct
+decisionTreeEx :: Tree DTNode
+decisionTreeEx = Node (Question "Cat1") [Node (Decision True) [], Node (Decision False) []]
 
-binEntropy :: Bin -> Int -> Double
-binEntropy bin numEntries = entropyOfBernoulliVariable (pCount/nBin) * nBin / nTotal
-    where
-        pCount = fromIntegral $ successCount bin
-        nBin = fromIntegral $ count bin
-        nTotal = fromIntegral numEntries
+decisionTree :: CategoryTable -> Tree DTNode
+decisionTree ct
+    |entropyRemainingAfterTest hcc ct == 0 = Node (Name (ct !! highestCorrelatedCategory))
+    |otherwise = decisionTreeEx
+    where 
+        hcc = highestCorrelatedCategory ct
 
-occurences :: String -> [String] -> Int
-occurences match = length . filter (== match)
-
---bestEntropy :: CategoryTable -> [String]
---bestEntropy catTable = max $ mapWithIndex (\i -> entropyRemainingAfterTest i catTable) catTable
-
-totalEntropy :: CategoryTable -> Double
-totalEntropy ct = entropyOfBernoulliVariable $ fromIntegral trueCount / fromIntegral totalCount
-    where
-        successCol = successColumn ct
-        trueCount = length $ filter id successCol
-        totalCount = length successCol
-
---The entropy of a Boolean random variable that is true with probability p
-entropyOfBernoulliVariable :: Double -> Double
-entropyOfBernoulliVariable 0 = 0
-entropyOfBernoulliVariable 1 = 0
-entropyOfBernoulliVariable p = -(p * log2 p + q * log2 q)
-    where
-        q = 1-p
-        log2 = logBase 2
-
+decisionTreeNodeRecursive :: CategoryTable -> DTResponse -> Node DTNode
+decisionTreeNodeRecursive ct response
+    | tValue == Just True = Node (DTNode response (DTValue (Decision True))) [] --All examples are true
+    | tValue == Just False = Node (DTNode response (DTValue (Decision False))) [] --All examples are false
+    | otherwise = Node (DTNode response (DTValue (Question name))) [] --Examples are mixed, bin and repeat
+    where 
+        tValue = tableValue ct
+        hcc = highestCorrelatedCategory ct
+        bs = bins hcc ct
+        subTables = map (\bin -> keepEntries (entries bin) ct ) bs --
+        subNodes = map (\n -> Node (DTNode )) subTables
+        

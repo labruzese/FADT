@@ -1,24 +1,28 @@
 module CSVLoader
 (loadCategoryTable,
 names,
+name,
 numCategories,
 numEntries,
+removeCategory,
+keepEntries,
+removeEntries,
+successColumn,
+tableValue,
 Bin,
-catName,
+entries,
+response,
 successCount,
 failCount,
 count,
 bins,
-binFromIndex,
-successColumn,
 CategoryTable()
 ) where
 
 import System.IO
+import Data.List
 import Data.Map.Strict (insertWith, Map, singleton, toList)
 import qualified Data.Map.Strict as Map
-
-import Data.List (isInfixOf, transpose, nub, foldl')
 import Data.Bool
 
 --An array of categories in the format CategoryTable[category][data point]
@@ -29,13 +33,56 @@ type CategoryTable = [[String]]
 names :: CategoryTable -> [String]
 names = map head
 
+name :: Int -> CategoryTable -> String
+name i ct = head $ ct !! i
+
 numCategories :: CategoryTable -> Int
 numCategories = length
 
 numEntries :: CategoryTable -> Int
 numEntries = length . tail . head
 
-data Bin = Bin { catName :: String
+removeCategory :: String -> CategoryTable -> CategoryTable
+removeCategory name = filter (\cat -> head cat /= name)
+
+keepEntries :: [Int] -> CategoryTable -> CategoryTable
+keepEntries keepIndices ct = removeEntries removeIndices ct
+    where removeIndices = [0..(length ct)] \\ keepIndices
+
+removeEntries :: [Int] -> CategoryTable -> CategoryTable
+removeEntries indices = map (removeIndices indices)
+
+--Removes the given indices from the list. Indices must be in sorted order.
+removeIndices :: [Int] -> [a] -> [a]
+removeIndices indices = removeIndicesRecursive indices 0
+
+removeIndicesRecursive :: [Int] -> Int -> [a] -> [a]
+removeIndicesRecursive _ _ [] = []
+removeIndicesRecursive [] _ remainingList = remainingList
+removeIndicesRecursive rList@(r:rs) o (x:xs)
+    | r + o == 0 = removeIndicesRecursive (tail rList) (o-1) xs
+    | otherwise = x : removeIndicesRecursive rList (o-1) xs
+
+--Useless function can delete
+removeAtIndex :: Int -> [a] -> [a]
+removeAtIndex _ []     = []
+removeAtIndex n (x:xs)
+    | n == 0    = xs
+    | otherwise = x : removeAtIndex (n-1) xs
+
+successColumn :: CategoryTable -> [Bool]
+successColumn  = map read . head
+
+tableValue :: CategoryTable -> Maybe Bool
+tableValue ct
+    | numTrue == 0 = Just False
+    | numTrue == numEntries ct = Just True
+    | otherwise = Nothing
+    where numTrue = length . filter id $ successColumn ct
+
+--      ~Bin functions~
+data Bin = Bin { entries :: [Int]
+                ,response :: String
                 , successCount :: Int
                 , failCount :: Int
                 } deriving (Show)
@@ -45,29 +92,35 @@ count b = successCount b + failCount b
 
 --Given a column index and category table, return a list of bins
 bins :: Int -> CategoryTable -> [Bin]
-bins index ct = map snd (toList hashMap)
+bins catIndex ct = map snd (toList hashMap)
     where
         hashMap = foldl' insertToHashmap Map.empty kvs
 
+        --Pairs of bin names and success bool
         kvs :: [(String, Bin)]
-        kvs = zipWith pairKV (tail $ ct !! index) (tail $ successColumn ct)
+        kvs = zipWith3 pairKV (tail $ ct !! catIndex) (tail $ successColumn ct) [0..]
 
-        pairKV :: String -> Bool -> (String, Bin)
-        pairKV s b = (s, Bin s (bool 1 0 b) (bool 0 1 b))
+        pairKV :: String -> Bool -> Int -> (String, Bin)
+        pairKV s b i = (s, Bin [i] s (bool 1 0 b) (bool 0 1 b))
 
 insertToHashmap :: Map String Bin -> (String, Bin) -> Map String Bin
 insertToHashmap m (k,v) = insertWith adder k v m
     where
         adder :: Bin -> Bin -> Bin
-        adder new old = Bin (catName new) (successCount new + successCount old) (failCount new + failCount old)
+        adder new old = Bin (entries old ++ entries new) (response new) (successCount new + successCount old) (failCount new + failCount old)
 
---delete
+--useless function, delete
 binFromIndex :: Int -> CategoryTable -> [String]
 binFromIndex index = nub . tail . (!! index)
 
-successColumn :: CategoryTable -> [Bool]
-successColumn  = map read . head
+--If all successes = Just True, if all failures = Just False, else Nothing
+--Precondition: At least 1 success or failure
+binValue :: Bin -> Maybe Bool
+binValue (Bin _ _ 0 _) = Just True
+binValue (Bin _ _ _ 0) = Just False
+binValue _           = Nothing
 
+--      ~CSV Loading~
 --Loads the CategoryTable from a file path
 loadCategoryTable :: FilePath -> IO CategoryTable
 loadCategoryTable path = do
