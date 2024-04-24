@@ -41,30 +41,27 @@ type CategoryTable = [[String]]
 names :: CategoryTable -> [String]
 names = map head
 
--- name :: Int -> CategoryTable -> String
--- name i ct =
---     trace ( "\nInput index: " ++ show i ++
---             "\nInput category table: " ++ show ct ++
---             "\nResult: " ++ result) result
---     where
---         result = head (ct !! i)
-
+--The 0th category is the success category
 name :: Int -> CategoryTable -> String
 name i ct = head $ ct !! i
 
+--Does not count the success category
 numCategories :: CategoryTable -> Int
 numCategories ct = length ct - 1
 
+--The "category names" row does not count as an entry
 numEntries :: CategoryTable -> Int
 numEntries = length . tail . head
 
 removeCategory :: String -> CategoryTable -> CategoryTable
 removeCategory name = filter (\cat -> head cat /= name)
 
+--Entries start at 1 (the 0th entry is the category names row and is always kept)
 keepEntries :: [Int] -> CategoryTable -> CategoryTable
 keepEntries keepIndices ct = removeEntries removeIndices ct
-    where removeIndices = [1..(length ct)] \\ keepIndices
+    where removeIndices = [1..(1 + numEntries ct)] \\ keepIndices
 
+--Entries start at 1 (the 0th entry is the category names row)
 removeEntries :: [Int] -> CategoryTable -> CategoryTable
 removeEntries indices = map (removeIndices indices)
 
@@ -247,7 +244,7 @@ purgeExampleIf ct f = transpose $ head flipped : filter f (tail flipped)
 --      ~Testing examples~
 type Example = [(String, String)] --[(Question, Response)]
 
---Examples start at index 0
+--Examples start at index 1
 pullExample :: CategoryTable -> Int -> Example
 pullExample ct index = zip (head transposedTable) (exampleData transposedTable index)
     where transposedTable = transpose ct
@@ -257,7 +254,7 @@ pullExamples ct = map (zip (head transposedTable) . exampleData transposedTable)
     where transposedTable = transpose ct
 
 exampleData :: CategoryTable -> Int -> [String]
-exampleData transposedTable index = transposedTable !! (index + 1)
+exampleData transposedTable index = transposedTable !! index
 
 --Given an example and decision, checks if the decision is correct
 testExample :: Example -> Bool -> Bool

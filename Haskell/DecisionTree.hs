@@ -86,12 +86,11 @@ nodeFromResponse tree r = case index of Just i -> Just (children !! i)
 
 main :: IO ()
 main = do
-        ct30 <- loadCategoryTable "30dtd.csv"
-        let dt = decisionTree ct30
+        ct <- loadCategoryTable "49dtd.csv"
+        let dt = decisionTree $ keepEntries [10..25] ct
         putStr . concat $ replicate 10 "\n"
         printTree dt
-        ct49 <- loadCategoryTable "49dtd.csv"
-        let examples = pullExamples ct49 [30..48]
+        let examples = pullExamples ct [31..48]
         let tests = map (\ex -> maybe "Nothing" show (testMaybeExample ex (makeDecision dt ex))) examples
         print tests
         let numCorrect = length (filter (=="True") tests)
