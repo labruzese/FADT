@@ -17,24 +17,26 @@ import qualified Data.Map.Strict as Map
 
 import Data.List (isInfixOf, transpose, nub, foldl')
 import Data.Bool
+import Distribution.Compat.Prelude (readMaybe)
 
 --An array of categories in the format CategoryTable[category][data point]
     --The first column consists of unique category names
     --The first row consists of either "True" or "False" except for the first itme which is the category name
 type CategoryTable = [[String]]
 type Category = [String]
+missing = "N/A"
 
 names :: CategoryTable -> [String]
 names = map head
 
 numCategories :: CategoryTable -> Int
-numCategories = length
+numCategories x = length x - 1
 
 numEntries :: CategoryTable -> Int
 numEntries = length . tail . head
 
 successColumn :: CategoryTable -> [Bool]
-successColumn  = map read . head
+successColumn  = map read . tail . head
 
 --Loads the CategoryTable from a file path
 loadCategoryTable :: FilePath -> IO CategoryTable
@@ -69,15 +71,14 @@ filterType :: String -> (String -> String)
 filterType header
     | "CS Req Grade" `isInfixOf` header = successBool
     | "Grade" `isInfixOf` header = gradeFilter
-    -- | "Teacher" `isInfixOf` header = teacherFilter
+    | "Teacher" `isInfixOf` header = teacherFilter
     -- | "Level" `isInfixOf` header = levelFilter
     -- | "World Language" `isInfixOf` header = wlFilter
     -- | "LP" `isInfixOf` header = lpFilter
-    -- | "Birth Month" `isInfixOf` header = dobFilter
-    -- | "Siblings" `isInfixOf` header = siblingFilter
+    | "Abs+Tardies" `isInfixOf` header = abstFilter
+    | "Birth Month" `isInfixOf` header = birthMonthFilter
+    | "Siblings" `isInfixOf` header = siblingFilter
     | otherwise = id
-
-
 
 successBool :: String -> String
 successBool grade
@@ -87,9 +88,42 @@ successBool grade
 
 gradeFilter :: String -> String
 gradeFilter grade
-    | strippedGrade > 'C' = "C or worse"
+    | null grade = missing
+    | strippedGrade >= 'C' = "C or worse"
     | otherwise = [strippedGrade]
-    where strippedGrade = head $ grade `removeSuffix` '+' `removeSuffix` '-'
+    where strippedGrade = head grade
+
+teacherFilter :: String -> String
+teacherFilter = take 4
+
+abstFilter :: String -> String
+abstFilter count =
+        case readMaybe count of
+        Nothing -> missing
+        Just m ->
+            if m < 10
+                then "Few"
+            else if m > 10
+                then "Many"
+            else missing
+
+birthMonthFilter :: String -> String
+birthMonthFilter month =
+    case readMaybe month of
+        Nothing -> missing
+        Just m ->
+            if m `elem` [9..12]
+                then "Early"
+            else if m `elem` [1..4]
+                then "Middle"
+            else if m `elem` [5..8]
+                then "Late"
+            else missing
+
+siblingFilter :: String -> String
+siblingFilter "0" = "0"
+siblingFilter "1" = "1"
+siblingFilter _ = "2+"
 
 --Removes the given suffix if found
 removeSuffix :: String -> Char -> String
@@ -108,4 +142,4 @@ negExamples ct = count False $ successColumn ct
     where
         count x = length . filter (== x)
 
-main = loadCategoryTable "dtd.csv"
+main = loadCategoryTable "49dtd.csv"

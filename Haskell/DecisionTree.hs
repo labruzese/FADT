@@ -5,13 +5,26 @@ import Data.List ( maximumBy, elemIndex, nub, transpose )
 import Data.Foldable (maximumBy)
 import Data.Function (on)
 import Data.Ord (comparing)
+import GHC.OldList (intercalate)
+import Data.Tree (Tree)
 
-data NodeData = Question String | Answer Bool
+data NodeData = Question String | Answer Bool deriving (Show)
 
 data Edge = Edge { label :: String, destination :: Node }
 data Node = Node { nodeData :: NodeData, edges :: [Edge] }
+instance Show Node where
+    show x = show (nodeData x) ++ "\n Answers: " ++ intercalate " or " (map show (edges x))
+
+instance Show Edge where
+    show x = show (label x)
+
 
 --DECISION TREE MAIN--
+
+
+
+decisionTreeFromCSV :: IO Node
+decisionTreeFromCSV = CSVLoader.main >>= \cts -> return $ decisionTree [cts]
 
 decisionTree :: [CategoryTable] -> Node
 decisionTree (currCT : prevCTS)
@@ -39,18 +52,21 @@ featuresIn cat = nub $ tail cat
 
 importance :: CategoryTable -> Category -> Double
 importance ct cat = entropyOfBool pGoal - remainingEntropy ct cat
-    where 
+    where
         pGoal = p / (p+n)
         p = fromIntegral $ posExamples ct
         n = fromIntegral $ negExamples ct
 
 remainingEntropy :: CategoryTable -> Category -> Double
-remainingEntropy ct cat = sum $ map (\s -> proportionRemaining s * entropyOfBool (propSuccess s)) (subsets cat ct)
+remainingEntropy ct cat = sum $ map individualEntropy (subsets cat ct)
     where
-        proportionRemaining sub = examples sub / examples ct
-        propSuccess sub = p sub / examples ct
-        p ctable = fromIntegral $ posExamples ctable
-        examples ctable = fromIntegral $ numEntries ctable
+        individualEntropy category = proportionRemaining category * entropyOfBool (propSuccess category)
+
+        proportionRemaining subCT = examples subCT / examples ct
+        propSuccess subCT = p subCT / examples subCT
+
+        p x = fromIntegral $ posExamples x
+        examples x = fromIntegral $ numEntries x
 
 entropyOfBool :: Double -> Double
 entropyOfBool 0 = 0
