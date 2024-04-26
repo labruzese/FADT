@@ -1,20 +1,30 @@
 module DecisionTree where
 
 import CSVLoader
-import Data.List ( maximumBy, elemIndex, nub, transpose )
-import Data.Foldable (maximumBy)
+import Data.List ( maximumBy, minimumBy, elemIndex, nub, transpose )
 import Data.Function (on)
 import Data.Ord (comparing)
 import GHC.OldList (intercalate)
-import Data.Tree (Tree)
 
-data NodeData = Question String | Answer Bool deriving (Show)
+--MAIN CALLS--
+
+m = do
+    dt <- decisionTreeFromCSV
+    putStrLn $ drawTree dt
+
+decisionTreeFromCSV :: IO Node
+decisionTreeFromCSV = CSVLoader.main >>= \cts -> return $ decisionTree (cts, [[]])
+
+--DATA TYPES AND PRINTING--
+
+data NodeData = Question String | Answer Bool
 
 data Edge = Edge { label :: String, destination :: Node }
 data Node = Node { nodeData :: NodeData, edges :: [Edge] }
-instance Show Node where
-    show x = show (nodeData x) ++ "\n Answers: " ++ intercalate " or " (map show (edges x))
 
+instance Show NodeData where
+    show (Answer x) = (if x then "\ESC[0;32m" else "\ESC[0;31m") ++ show x ++ "\ESC[0m"
+    show (Question x) = "\ESC[0;35m" ++ show x ++ "\ESC[0m"
 instance Show Edge where
     show x = show (label x)
 
@@ -32,61 +42,49 @@ draw (Node n e) = lines (show n) ++ drawSubTrees e
 
     shift first other = zipWith (++) (first : repeat other)
 
---DECISION TREE MAIN--
-
-m = do
-    dt <- decisionTreeFromCSV
-    putStrLn $ drawTree dt
-
-decisionTreeFromCSV :: IO Node
-decisionTreeFromCSV = CSVLoader.main >>= \cts -> return $ decisionTree (cts, [[]])
+--DECISION TREE MAIN-
 
 decisionTree :: (CategoryTable, CategoryTable) -> Node
 decisionTree (currCT, prevCTS)
     | null $ successColumn currCT = plurityValue prevCTS
-    | and $ successColumn currCT = Node (Answer $ successColumn currCT !! 1) []
+    | and (successColumn currCT) = Node (Answer True) []
+    | all not (successColumn currCT) = Node (Answer False) []
     | null $ tail currCT = plurityValue currCT
-    | otherwise = Node (Question $ head bestCategory) (zipWith edgeCreator (featuresIn bestCategory) (subsets bestCategory currCT))
+    | otherwise = Node (Question $ head bestCategory) (map (uncurry edgeCreator) (subsets bestCategoryID currCT))
     where
         plurityValue category = Node (Answer $ mostFrequentItem $ successColumn category) []
-        bestCategory = maximumBy (comparing $ importance currCT) currCT
-        bestCategoryID = findIndexInList bestCategory currCT
-        edgeCreator label newCTS = Edge label $ decisionTree (newCTS, prevCTS)
+        bestCategory = currCT !! bestCategoryID
+        bestCategoryID = minimumBy (comparing $ remainingEntropy currCT) [1..length currCT - 1]
+        edgeCreator label newCTS = Edge label $ curry decisionTree newCTS prevCTS
 
-subsets :: Category -> CategoryTable -> [CategoryTable]
-subsets cat ct = map (\x -> subset ct x (findIndexInList cat ct)) (featuresIn cat)
+subsets :: Int -> CategoryTable -> [(String,CategoryTable)]
+subsets catID ct = map (\i -> (i, subset ct i cat)) (featuresIn cat)
+    where cat = ct !! catID
 
-subset :: CategoryTable -> String -> Int -> CategoryTable
-subset ct feature categoryID = transpose $ filter (\example -> example !! categoryID /= feature) exampleTable
-    where exampleTable = transpose ct
+subset :: CategoryTable -> String -> Category -> CategoryTable
+subset ct feature cat = transpose $ head (transpose ct) : map (transpose ct !!) acceptableIDs
+    where
+        acceptableIDs = filter (\i -> cat !! i == feature) [0..length cat - 1]
 
 featuresIn :: Category -> [String]
 featuresIn cat = nub $ tail cat
 
 --ENTROPY--
 
-importance :: CategoryTable -> Category -> Double
-importance ct cat = -remainingEntropy ct cat
-
-remainingEntropy :: CategoryTable -> Category -> Double
-remainingEntropy ct cat = sum $ map individualEntropy (subsets cat ct)
+remainingEntropy :: CategoryTable -> Int -> Double
+remainingEntropy ct catID = sum $ map (individualEntropy . snd) (subsets catID ct)
     where
-        individualEntropy category = proportionRemaining category * entropyOfBool (propSuccess category)
-
-        proportionRemaining subCT = examples subCT / examples ct
-        propSuccess subCT = p subCT / examples subCT
-
-        p x = fromIntegral $ posExamples x
-        examples x = fromIntegral $ numEntries x
+        individualEntropy ct2 = (numEnts ct2/numEnts ct) * entropyOfBool (posExs ct2 / numEnts ct2)
+        posExs x = fromIntegral $ posExamples x
+        numEnts x = fromIntegral $ numEntries x
 
 entropyOfBool :: Double -> Double
 entropyOfBool 0 = 0
-entropyOfBool 1 = 1
-entropyOfBool p = -( p * log2 p + q * log2 q ) 
+entropyOfBool 1 = 0
+entropyOfBool p = -(p * log2 p + q * log2 q)
     where
-        q = 1 - p
+        q = 1-p
         log2 = logBase 2
-
 
 --HELPERS--
 
