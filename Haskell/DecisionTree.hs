@@ -18,25 +18,40 @@ instance Show Node where
 instance Show Edge where
     show x = show (label x)
 
+drawTree :: Node -> String
+drawTree  = unlines . draw
+
+draw :: Node -> [String]
+draw (Node n e) = lines (show n) ++ drawSubTrees e
+  where
+    drawSubTrees [] = []
+    drawSubTrees [e] =
+        ( "|" ++ show e ) : shift "`- " "   " (draw (destination e))
+    drawSubTrees (e:es) =
+        ( "|" ++ show e ) : shift "+- " "|  " (draw (destination e)) ++ drawSubTrees es
+
+    shift first other = zipWith (++) (first : repeat other)
 
 --DECISION TREE MAIN--
 
-
+m = do
+    dt <- decisionTreeFromCSV
+    putStrLn $ drawTree dt
 
 decisionTreeFromCSV :: IO Node
-decisionTreeFromCSV = CSVLoader.main >>= \cts -> return $ decisionTree [cts]
+decisionTreeFromCSV = CSVLoader.main >>= \cts -> return $ decisionTree (cts, [[]])
 
-decisionTree :: [CategoryTable] -> Node
-decisionTree (currCT : prevCTS)
-    | null $ tail $ successColumn currCT = plurityValue (head prevCTS)
-    | and $ tail $ successColumn currCT = Node (Answer $ successColumn currCT !! 1) []
+decisionTree :: (CategoryTable, CategoryTable) -> Node
+decisionTree (currCT, prevCTS)
+    | null $ successColumn currCT = plurityValue prevCTS
+    | and $ successColumn currCT = Node (Answer $ successColumn currCT !! 1) []
     | null $ tail currCT = plurityValue currCT
     | otherwise = Node (Question $ head bestCategory) (zipWith edgeCreator (featuresIn bestCategory) (subsets bestCategory currCT))
     where
         plurityValue category = Node (Answer $ mostFrequentItem $ successColumn category) []
         bestCategory = maximumBy (comparing $ importance currCT) currCT
         bestCategoryID = findIndexInList bestCategory currCT
-        edgeCreator label newCTS = Edge label $ decisionTree (newCTS : prevCTS)
+        edgeCreator label newCTS = Edge label $ decisionTree (newCTS, prevCTS)
 
 subsets :: Category -> CategoryTable -> [CategoryTable]
 subsets cat ct = map (\x -> subset ct x (findIndexInList cat ct)) (featuresIn cat)
@@ -51,11 +66,7 @@ featuresIn cat = nub $ tail cat
 --ENTROPY--
 
 importance :: CategoryTable -> Category -> Double
-importance ct cat = entropyOfBool pGoal - remainingEntropy ct cat
-    where
-        pGoal = p / (p+n)
-        p = fromIntegral $ posExamples ct
-        n = fromIntegral $ negExamples ct
+importance ct cat = -remainingEntropy ct cat
 
 remainingEntropy :: CategoryTable -> Category -> Double
 remainingEntropy ct cat = sum $ map individualEntropy (subsets cat ct)
@@ -71,9 +82,9 @@ remainingEntropy ct cat = sum $ map individualEntropy (subsets cat ct)
 entropyOfBool :: Double -> Double
 entropyOfBool 0 = 0
 entropyOfBool 1 = 1
-entropyOfBool probability = -( sum $ map entropyOfVar [probability, 1-probability] )
+entropyOfBool p = -( p * log2 p + q * log2 q ) 
     where
-        entropyOfVar x = x * log2 x
+        q = 1 - p
         log2 = logBase 2
 
 
