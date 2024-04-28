@@ -43,6 +43,8 @@ draw (Node n e) = lines (show n) ++ drawSubTrees e
     shift first other = zipWith (++) (first : repeat other)
 
 --DECISION TREE MAIN-
+dt :: CategoryTable -> Node
+dt x = decisionTree (x,[[]])
 
 decisionTree :: (CategoryTable, CategoryTable) -> Node
 decisionTree (currCT, prevCTS)
@@ -98,3 +100,24 @@ mostFrequentItem :: (Eq a) => [a] -> a
 mostFrequentItem (x:xs) = fst $ maximumBy (compare `on` snd) $ map (\y -> (y, count y (x:xs))) (x:xs)
     where
         count x = length . filter (== x)
+
+-- TESTING --
+test :: Node -> CategoryTable -> (Int,Int)
+test dt ct = (count True answers, length ct)
+    where
+        answers = map (interrogate dt . (\x -> (head (transpose ct), tail (transpose ct !! x)))) [0..length (head ct) - 1]
+        count x = length . filter (== x)
+
+interrogate :: Node -> ([String],[String]) -> Bool
+interrogate (Node (Answer a) _) _ = a
+interrogate (Node (Question q) e) (headers, answers) = interrogate (ask q) (headers, answers)
+    where
+        ask q = destination $ head $ filter (\x -> label x == answers !! findIndexInList q headers) e
+
+
+
+run = do
+    trainCSV <- trim <$> main
+    testCSV <- trim2 <$> main
+    let d = dt testCSV
+    return $ test d testCSV

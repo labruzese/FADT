@@ -8,7 +8,9 @@ posExamples,
 negExamples,
 CategoryTable(),
 Category(),
-main
+main,
+trim,
+trim2
 ) where
 
 import System.IO
@@ -142,4 +144,12 @@ negExamples ct = count False $ successColumn ct
     where
         count x = length . filter (== x)
 
+
+trim :: CategoryTable -> CategoryTable
+trim x = transpose $ map (transpose x !!) [0..30]
+trim2 :: CategoryTable -> CategoryTable
+trim2 x = transpose $ map (transpose x !!) [31..length x - 1]
+
+
 main = loadCategoryTable "49dtd.csv"
+
