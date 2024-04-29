@@ -239,6 +239,7 @@ removeSuffix str c
 purgeExampleIf :: CategoryTable -> ([String] -> Bool) -> CategoryTable
 purgeExampleIf ct f = transpose $ head flipped : filter f (tail flipped)
     where flipped = transpose ct
+    
 --      ~Testing examples~
 type Example = [(String, String)] --[(Question, Response)]
 

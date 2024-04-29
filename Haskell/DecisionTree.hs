@@ -1,5 +1,6 @@
 module DecisionTree
-(DTNodeValue,
+(DecisionTree,
+DTNodeValue,
 DTResponse,
 DTNode,
 decisionTree,
@@ -15,6 +16,7 @@ import Debug.Trace
 import Data.List (intersperse, intercalate, findIndex)
 import Data.Maybe (fromMaybe)
 
+type DecisionTree = Tree DTNode
 --      ~Tree creation~
 data DTNodeValue = Question String | Decision Bool | NoDecision deriving (Read)
 instance Show DTNodeValue where
@@ -32,10 +34,10 @@ instance Show DTNode where
     show (DTNode (Just r) v) = "|" ++ r ++ " -> " ++ show v ++ "|  "
     show (DTNode Nothing v)  = "|root -> " ++ show v ++ "|  "
 
-decisionTree :: CategoryTable -> Tree DTNode
+decisionTree :: CategoryTable -> DecisionTree
 decisionTree ct = decisionTreeNodeRecursive ct Nothing
 
-decisionTreeNodeRecursive :: CategoryTable -> DTResponse -> Tree DTNode
+decisionTreeNodeRecursive :: CategoryTable -> DTResponse -> DecisionTree
 decisionTreeNodeRecursive ct response
     | numCategories ct == 0 = Node (DTNode response NoDecision) []
     | tValue == Just True = Node (DTNode response (Decision True)) []
@@ -58,7 +60,8 @@ printTree :: Show a => Tree a -> IO ()
 printTree = putStrLn . drawTree . fmap show
 
 --      ~Decision making~
-makeDecision :: Tree DTNode -> Example -> Maybe Bool
+-- Just Bool represents the decision, Nothing represents a failure to make a decision
+makeDecision :: DecisionTree -> Example -> Maybe Bool
 makeDecision tree example = case currNodeValue of   Decision b -> Just b
                                                     Question s -> case nFromQ s of  Just d -> makeDecision d example
                                                                                     Nothing -> Nothing
@@ -68,7 +71,7 @@ makeDecision tree example = case currNodeValue of   Decision b -> Just b
         
 
 --Given a question, pulls the response from the example and finds the correct child node
-nodeFromQuestion :: Tree DTNode -> Example -> String -> Maybe (Tree DTNode)
+nodeFromQuestion :: DecisionTree -> Example -> String -> Maybe DecisionTree
 nodeFromQuestion tree example = nodeFromResponse tree . responseFromExample example
 
 --Given an example and a question, finds the example's response
@@ -78,11 +81,11 @@ responseFromExample e q = case index of Just i -> snd (e !! i)
     where index = findIndex (\c -> fst c == q) e --Finds the index of the question(category name)
 
 --Finds the child node with the given response
-nodeFromResponse :: Tree DTNode -> String -> Maybe (Tree DTNode)
+nodeFromResponse :: DecisionTree -> String -> Maybe DecisionTree
 nodeFromResponse tree r = case index of Just i -> Just (children !! i)
                                         Nothing -> Nothing
     where
-        match :: Tree DTNode -> Bool
+        match :: DecisionTree -> Bool
         match t = r == fromMaybe "" (dtResponse $ rootLabel t)
 
         children = subForest tree
