@@ -4,7 +4,8 @@ DTResponse,
 DTNode,
 decisionTree,
 printLevels,
-printTree
+printTree,
+makeDecision
 ) where
 
 import CSVLoader
@@ -58,20 +59,25 @@ printTree = putStrLn . drawTree . fmap show
 
 --      ~Decision making~
 makeDecision :: Tree DTNode -> Example -> Maybe Bool
-makeDecision tree example = case v of   Decision b -> Just b
-                                        Question s -> case nodeFromQuestion s of    Just d -> makeDecision d example
+makeDecision tree example = case currNodeValue of   Decision b -> Just b
+                                                    Question s -> case nFromQ s of  Just d -> makeDecision d example
                                                                                     Nothing -> Nothing
     where
-        v = value $ rootLabel tree
-        nodeFromQuestion :: String -> Maybe (Tree DTNode)
-        nodeFromQuestion = nodeFromResponse tree . responseFromExample example
+        currNodeValue = value $ rootLabel tree
+        nFromQ = nodeFromQuestion tree example
+        
 
+--Given a question, pulls the response from the example and finds the correct child node
+nodeFromQuestion :: Tree DTNode -> Example -> String -> Maybe (Tree DTNode)
+nodeFromQuestion tree example = nodeFromResponse tree . responseFromExample example
 
+--Given an example and a question, finds the example's response
 responseFromExample :: Example -> String -> String
 responseFromExample e q = case index of Just i -> snd (e !! i)
                                         Nothing -> error "Question not found in example"
-    where index = findIndex (\c -> fst c == q) e
+    where index = findIndex (\c -> fst c == q) e --Finds the index of the question(category name)
 
+--Finds the child node with the given response
 nodeFromResponse :: Tree DTNode -> String -> Maybe (Tree DTNode)
 nodeFromResponse tree r = case index of Just i -> Just (children !! i)
                                         Nothing -> Nothing
@@ -81,18 +87,3 @@ nodeFromResponse tree r = case index of Just i -> Just (children !! i)
 
         children = subForest tree
         index = findIndex match children
-
-
-
-main :: IO ()
-main = do
-        ct <- loadCategoryTable "49dtd.csv"
-        let dt = decisionTree $ keepEntries [10..25] ct
-        putStr . concat $ replicate 10 "\n"
-        printTree dt
-        let examples = pullExamples ct [31..48]
-        let tests = map (\ex -> maybe "Nothing" show (testMaybeExample ex (makeDecision dt ex))) examples
-        print tests
-        let numCorrect = length (filter (=="True") tests)
-        let totalTests = length tests
-        putStrLn $ show numCorrect ++ "/" ++ show totalTests ++ " = " ++ show (fromIntegral numCorrect / fromIntegral totalTests)

@@ -19,9 +19,7 @@ bins,
 CategoryTable(),
 Example,
 pullExample,
-pullExamples,
-testExample,
-testMaybeExample
+pullExamples
 ) where
 
 import System.IO
@@ -255,12 +253,3 @@ pullExamples ct = map (zip (head transposedTable) . exampleData transposedTable)
 
 exampleData :: CategoryTable -> Int -> [String]
 exampleData transposedTable index = transposedTable !! index
-
---Given an example and decision, checks if the decision is correct
-testExample :: Example -> Bool -> Bool
-testExample ex decision = decision == trueResult
-    where trueResult = read $ snd (head ex)
-
-testMaybeExample :: Example -> Maybe Bool -> Maybe Bool
-testMaybeExample ex Nothing = Nothing
-testMaybeExample ex (Just b) = Just $ testExample ex b
