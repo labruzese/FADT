@@ -1,6 +1,5 @@
 module CSVLoader
 (loadCategoryTable,
-names,
 numCategories,
 numEntries,
 successColumn,
@@ -10,16 +9,21 @@ CategoryTable(),
 Category(),
 main,
 trim,
-trim2
+trim2,
+headers,
+entries,
+loadTrainingSet
 ) where
 
 import System.IO
 import Data.Map.Strict (insertWith, Map, singleton, toList)
 import qualified Data.Map.Strict as Map
 
-import Data.List (isInfixOf, transpose, nub, foldl')
+import Data.List (isInfixOf, transpose, nub, foldl', minimumBy)
 import Data.Bool
 import Distribution.Compat.Prelude (readMaybe)
+import Data.Ord (comparing)
+import Data.List (sortBy)
 
 --An array of categories in the format CategoryTable[category][data point]
     --The first column consists of unique category names
@@ -28,14 +32,11 @@ type CategoryTable = [[String]]
 type Category = [String]
 missing = "N/A"
 
-names :: CategoryTable -> [String]
-names = map head
-
 numCategories :: CategoryTable -> Int
 numCategories x = length x - 1
 
 numEntries :: CategoryTable -> Int
-numEntries = length . tail . head
+numEntries = length . entries
 
 successColumn :: CategoryTable -> [Bool]
 successColumn  = map read . tail . head
@@ -91,9 +92,56 @@ successBool grade
 gradeFilter :: String -> String
 gradeFilter grade
     | null grade = missing
+    | grade == missing = missing
     | strippedGrade >= 'C' = "C or worse"
     | otherwise = [strippedGrade]
     where strippedGrade = head grade
+
+--given a split point returns the grades binned into stuff better and worse than it
+gradeFilterWithSplitPoint :: String -> String -> String
+gradeFilterWithSplitPoint sp grade
+    | null grade = missing
+    | grade == missing = missing
+    | gradeComparator grade >= gradeComparator sp = sp ++ " or worse"
+    | otherwise = sp ++ " or better"
+
+--find the split point that puts the most successes on one side of the split and returns that feature
+findSplitPointGrades :: CategoryTable -> Category -> String
+findSplitPointGrades ct cat = sortedItems !! minimumBy (comparing (successCountComparator . successCountForFirstFeature . binCategory)) possibleSplitPoints
+    where
+        --the categories which are grades that are sorted
+        sortedItems = nub $ sortBy (comparing gradeComparator) cat 
+
+        --All the indexes of possible split points
+        possibleSplitPoints = [1..length sortedItems-1] 
+
+        --best distance from all successes or all failures
+        successCountComparator x = min x (length cat - x) 
+
+        --Returns the category with the grade filter at the split point applied
+        binCategory sp = map (gradeFilterWithSplitPoint (sortedItems !! sp)) (tail cat) 
+        
+        --Counts the amount of successes for the first item in the category
+        successCountForFirstFeature spCat = count True $ zipWith (isSuccess (head spCat)) spCat (successColumn ct) 
+
+        isSuccess bin1 spV scV = (scV && spV == bin1) || (not scV && (spV /= bin1))
+
+        count x = length . filter (== x) 
+
+--double value for a grade for comparision
+gradeComparator :: String -> Double
+gradeComparator x = charToDouble (head x) + plusMinusAnalysis x
+    where
+        plusMinusAnalysis x
+            | "+" `isInfixOf` x = -0.5
+            | "-" `isInfixOf` x = 0.5
+        charToDouble x
+            | x == 'A' = 1.0
+            | x == 'B' = 2.0
+            | x == 'C' = 3.0
+            | x == 'D' = 4.0
+            | x == 'F' = 5.0
+            | otherwise = 10.0
 
 teacherFilter :: String -> String
 teacherFilter = take 4
@@ -144,12 +192,20 @@ negExamples ct = count False $ successColumn ct
     where
         count x = length . filter (== x)
 
+headers :: CategoryTable -> [String]
+headers = map head
 
-trim :: CategoryTable -> CategoryTable
-trim x = transpose $ map (transpose x !!) [0..30]
-trim2 :: CategoryTable -> CategoryTable
-trim2 x = transpose $ map (transpose x !!) [31..length x - 1]
+entries :: CategoryTable -> [[String]]
+entries = transpose . map tail
+
+
+trim :: Int -> CategoryTable -> CategoryTable
+trim sp x = transpose $ map (transpose x !!) [0..sp]
+trim2 :: Int -> CategoryTable -> CategoryTable
+trim2 sp x = transpose $ map (transpose x !!) (0 : [sp+1..numEntries x])
 
 
 main = loadCategoryTable "49dtd.csv"
+
+loadTrainingSet = loadCategoryTable "wikiTest.csv"
 

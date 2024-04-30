@@ -1,0 +1,15 @@
+CS Req Grade,Outlook,Temperature,Humidity,Wind
+D,Sunny,Hot,High,False
+D,Sunny,Hot,High,True
+A,Overcast,Hot,High,False
+A,Rainy,Mild,High,False
+A,Rainy,Cool,Normal,False
+D,Rainy,Cool,Normal,True
+A,Overcast,Cool,Normal,True
+D,Sunny,Mild,High,False
+A,Sunny,Cool,Normal,False
+A,Rainy,Mild,Normal,False
+A,Sunny,Mild,Normal,False
+A,Overcast,Mild,High,True
+A,Overcast,Hot,Normal,False
+D,Rainy,Mild,High,True

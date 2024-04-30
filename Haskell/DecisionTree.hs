@@ -1,10 +1,12 @@
 module DecisionTree where
 
 import CSVLoader
-import Data.List ( maximumBy, minimumBy, elemIndex, nub, transpose )
+import Data.List ( maximumBy, minimumBy, elemIndex, nub, transpose, find )
 import Data.Function (on)
 import Data.Ord (comparing)
 import GHC.OldList (intercalate)
+import Debug.Trace (trace)
+import Control.Monad ( (>=>) )
 
 --MAIN CALLS--
 
@@ -52,7 +54,7 @@ decisionTree (currCT, prevCTS)
     | and (successColumn currCT) = Node (Answer True) []
     | all not (successColumn currCT) = Node (Answer False) []
     | null $ tail currCT = plurityValue currCT
-    | otherwise = Node (Question $ head bestCategory) (map (uncurry edgeCreator) (subsets bestCategoryID currCT))
+    | otherwise = Node (Question $ head bestCategory ++ "?") (map (uncurry edgeCreator) (subsets bestCategoryID currCT))
     where
         plurityValue category = Node (Answer $ mostFrequentItem $ successColumn category) []
         bestCategory = currCT !! bestCategoryID
@@ -103,21 +105,43 @@ mostFrequentItem (x:xs) = fst $ maximumBy (compare `on` snd) $ map (\y -> (y, co
 
 -- TESTING --
 test :: Node -> CategoryTable -> (Int,Int)
-test dt ct = (count True answers, length ct)
+test dt ct = (count True (zipWith (==) realAnswers answers), numEntries ct)
     where
-        answers = map (interrogate dt . (\x -> (head (transpose ct), tail (transpose ct !! x)))) [0..length (head ct) - 1]
-        count x = length . filter (== x)
+        answers = map (interrogate dt . zip (headers ct) . (entries ct !!)) [0..numEntries ct - 1]
+        count x = length . filter (==x)
+        realAnswers = successColumn ct
 
-interrogate :: Node -> ([String],[String]) -> Bool
+interrogate :: Node -> [(String, String)] -> Bool
 interrogate (Node (Answer a) _) _ = a
-interrogate (Node (Question q) e) (headers, answers) = interrogate (ask q) (headers, answers)
+interrogate (Node (Question q) edges) example = interrogate (answerNodeFrom q) example
     where
-        ask q = destination $ head $ filter (\x -> label x == answers !! findIndexInList q headers) e
+        answerNodeFrom q = case find ((==answer q) . Just . label) edges of
+            Just x -> destination x
+            Nothing -> Node (Answer False) []
+        answer :: String -> Maybe String
+        answer question = Just . snd =<< find ((== question) . fst) example
 
+run :: Int -> IO TestResult
+run sp = do
+    size <- fromIntegral . numEntries <$> loadTrainingSet
+    trainCSV <- trim sp <$> loadTrainingSet
+    testCSV <- trim2 sp <$> loadTrainingSet
+    let d = dt trainCSV
+    return $ uncurry TestResult $ test d testCSV
 
+data TestResult = TestResult { successes :: Int, total :: Int }
+instance Show TestResult where
+    show :: TestResult -> String
+    show t = show p ++ "/" ++ show n ++ " -> " ++ show (fromIntegral p / fromIntegral n)
+        where
+            p = successes t
+            n = total t
 
-run = do
-    trainCSV <- trim <$> main
-    testCSV <- trim2 <$> main
-    let d = dt testCSV
-    return $ test d testCSV
+a :: IO ()
+a = mapM_ (\p -> run p >>= \result -> putStrLn (show p ++ " | " ++ show result)) [1..14]
+
+b sp = do
+    size <- fromIntegral . numEntries <$> main
+    trainCSV <- trim sp <$> loadTrainingSet
+    testCSV <- trim2 sp <$> loadTrainingSet
+    putStrLn $ drawTree $ dt trainCSV
