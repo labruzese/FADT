@@ -36,6 +36,7 @@ import Data.Maybe (isNothing)
     --The first column consists of unique category names
 type CategoryTable = [[String]]
 
+
 names :: CategoryTable -> [String]
 names = map head
 
@@ -149,6 +150,9 @@ splitOn delim xs = case break (== delim) xs of
     (before, []) -> [before]
     (before, _:ys) -> before : splitOn delim ys
 
+--      ~Binary expansion~
+
+
 
 --      ~Overall Filters~
 missing = "N/A"
@@ -239,7 +243,7 @@ removeSuffix str c
 purgeExampleIf :: CategoryTable -> ([String] -> Bool) -> CategoryTable
 purgeExampleIf ct f = transpose $ head flipped : filter f (tail flipped)
     where flipped = transpose ct
-    
+
 --      ~Testing examples~
 type Example = [(String, String)] --[(Question, Response)]
 
