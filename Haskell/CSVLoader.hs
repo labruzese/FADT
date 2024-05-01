@@ -5,8 +5,8 @@ numEntries,
 successColumn,
 posExamples,
 negExamples,
-CategoryTable(),
-Category(),
+StringCategoryTable(),
+StringCategory(),
 main,
 trim,
 trim2,
@@ -19,30 +19,38 @@ import System.IO
 import Data.Map.Strict (insertWith, Map, singleton, toList)
 import qualified Data.Map.Strict as Map
 
-import Data.List (isInfixOf, transpose, nub, foldl', minimumBy)
+import Data.List (isInfixOf, transpose, nub, foldl', minimumBy, tails)
 import Data.Bool
 import Distribution.Compat.Prelude (readMaybe)
 import Data.Ord (comparing)
 import Data.List (sortBy)
+import Debug.Trace (trace)
 
 --An array of categories in the format CategoryTable[category][data point]
     --The first column consists of unique category names
     --The first row consists of either "True" or "False" except for the first itme which is the category name
-type CategoryTable = [[String]]
-type Category = [String]
+type StringCategoryTable = [StringCategory]
+type StringCategory = [String]
+
+data NewCategoryTable = NewCategoryTable { predictionColumn :: BoolCategory, predictors :: [BoolCategory] }
+
+data BoolCategory = BoolCategory { name :: String, dataPoints :: CategoryData }
+type CategoryData = [Maybe Bool] -- make missing part of the features
+
+missing :: String
 missing = "N/A"
 
-numCategories :: CategoryTable -> Int
+numCategories :: StringCategoryTable -> Int
 numCategories x = length x - 1
 
-numEntries :: CategoryTable -> Int
+numEntries :: StringCategoryTable -> Int
 numEntries = length . entries
 
-successColumn :: CategoryTable -> [Bool]
+successColumn :: StringCategoryTable -> [Bool]
 successColumn  = map read . tail . head
 
 --Loads the CategoryTable from a file path
-loadCategoryTable :: FilePath -> IO CategoryTable
+loadCategoryTable :: FilePath -> IO StringCategoryTable
 loadCategoryTable path = do
     content <- readFile path
     return $ formatCategories . formatMissing . transpose $ map (splitOn ',') (lines content)
@@ -60,13 +68,42 @@ missingFilter "MISSING" = "N/A"
 missingFilter str = str
 
 --Applies the missing filter
-formatMissing :: CategoryTable -> CategoryTable
+formatMissing :: StringCategoryTable -> StringCategoryTable
 formatMissing = map (map missingFilter)
 
+splitCategory :: StringCategory -> [BoolCategory]
+splitCategory category = map buildCategoryAtSplitPoint $ getPossibleSplitPoints (head category) (tail category)
+    where
+        buildCategoryAtSplitPoint acceptableFeatures = BoolCategory (head category) $ map (\x -> Just $ x `elem` acceptableFeatures) (tail category)
 
+getPossibleSplitPoints :: String -> StringCategory -> [StringCategory]
+getPossibleSplitPoints name category
+    | "Grade" `isInfixOf` name = uniqueFeaturesSortedWith gradeValueOf category
+    --ADD OTHER SORTABLE STUFF HERE
+    | otherwise = combos $ nub category
+    where
+        uniqueFeaturesSortedWith func features = split $ nub $ sortBy (comparing func) features
+        split xs = map (`take` xs) [1..length xs - 1]
+
+combos :: [a] -> [[a]]
+combos list = concatMap specialPick [1..ceiling $ (fromIntegral (length list) - 0.4) / 2.0]
+    where
+        specialPick n
+            | n == halfListLength = take n $ pickFrom list n
+            | otherwise = pickFrom list n
+        halfListLength = round (fromIntegral (length list) / 2)
+
+pickFrom :: [a] -> Int -> [[a]]
+pickFrom _ 0  = [[]]
+pickFrom [] _ = []
+pickFrom (x:xs) n  = map (x:) (pickFrom xs (n-1)) ++ pickFrom xs n
+
+
+gradeValueOf :: String -> Double
+gradeValueOf x = fromIntegral $ length x
 --      ~Specific Filters~
 --Applies specific filters to each category
-formatCategories :: CategoryTable -> CategoryTable
+formatCategories :: StringCategoryTable -> StringCategoryTable
 formatCategories = map (\cat -> head cat : map (filterType (head cat)) (tail cat))
 
 --Gets the specific filters for a category
@@ -106,27 +143,27 @@ gradeFilterWithSplitPoint sp grade
     | otherwise = sp ++ " or better"
 
 --find the split point that puts the most successes on one side of the split and returns that feature
-findSplitPointGrades :: CategoryTable -> Category -> String
+findSplitPointGrades :: StringCategoryTable -> StringCategory -> String
 findSplitPointGrades ct cat = sortedItems !! minimumBy (comparing (successCountComparator . successCountForFirstFeature . binCategory)) possibleSplitPoints
     where
         --the categories which are grades that are sorted
-        sortedItems = nub $ sortBy (comparing gradeComparator) cat 
+        sortedItems = nub $ sortBy (comparing gradeComparator) cat
 
         --All the indexes of possible split points
-        possibleSplitPoints = [1..length sortedItems-1] 
+        possibleSplitPoints = [1..length sortedItems-1]
 
         --best distance from all successes or all failures
-        successCountComparator x = min x (length cat - x) 
+        successCountComparator x = min x (length cat - x)
 
         --Returns the category with the grade filter at the split point applied
-        binCategory sp = map (gradeFilterWithSplitPoint (sortedItems !! sp)) (tail cat) 
-        
+        binCategory sp = map (gradeFilterWithSplitPoint (sortedItems !! sp)) (tail cat)
+
         --Counts the amount of successes for the first item in the category
-        successCountForFirstFeature spCat = count True $ zipWith (isSuccess (head spCat)) spCat (successColumn ct) 
+        successCountForFirstFeature spCat = count True $ zipWith (isSuccess (head spCat)) spCat (successColumn ct)
 
         isSuccess bin1 spV scV = (scV && spV == bin1) || (not scV && (spV /= bin1))
 
-        count x = length . filter (== x) 
+        count x = length . filter (== x)
 
 --double value for a grade for comparision
 gradeComparator :: String -> Double
@@ -182,26 +219,26 @@ removeSuffix str c
     | c == last str = init str
     | otherwise = str
 
-posExamples :: CategoryTable -> Int
+posExamples :: StringCategoryTable -> Int
 posExamples ct = count True $ successColumn ct
     where
         count x = length . filter (== x)
 
-negExamples :: CategoryTable -> Int
+negExamples :: StringCategoryTable -> Int
 negExamples ct = count False $ successColumn ct
     where
         count x = length . filter (== x)
 
-headers :: CategoryTable -> [String]
+headers :: StringCategoryTable -> [String]
 headers = map head
 
-entries :: CategoryTable -> [[String]]
+entries :: StringCategoryTable -> [[String]]
 entries = transpose . map tail
 
 
-trim :: Int -> CategoryTable -> CategoryTable
+trim :: Int -> StringCategoryTable -> StringCategoryTable
 trim sp x = transpose $ map (transpose x !!) [0..sp]
-trim2 :: Int -> CategoryTable -> CategoryTable
+trim2 :: Int -> StringCategoryTable -> StringCategoryTable
 trim2 sp x = transpose $ map (transpose x !!) (0 : [sp+1..numEntries x])
 
 
