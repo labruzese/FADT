@@ -171,7 +171,35 @@ splitOn delim xs = case break (== delim) xs of
 
 --      ~Binary expansion~
 
+--      ~Continous data comparators~
+gradeComparator :: String -> Double
+gradeComparator x = charToDouble (head x) + plusMinusAnalysis x
+    where
+        plusMinusAnalysis x
+            | "+" `isInfixOf` x = -0.33
+            | "-" `isInfixOf` x = 0.33
+        charToDouble x
+            | x == 'A' = 1.0
+            | x == 'B' = 2.0
+            | x == 'C' = 3.0
+            | x == 'D' = 4.0
+            | x == 'F' = 5.0
+            | otherwise = 10.0
 
+birthMonthComparator :: String -> Double
+birthMonthComparator string = (read string + 3) mod 12
+
+classLevelComparator :: String -> Double
+classLevelComparator "Honors" = 1
+classLevelComparator "Advanced" = 2
+classLevelComparator "Accelerated" = 3
+classLevelComparator "CP" = 4
+
+abstComparator :: String -> Double
+abstComparator = read
+
+siblingComparator :: String -> Double
+siblingComparator = read
 
 --      ~Overall Filters~
 missing = "N/A"
