@@ -1,4 +1,0 @@
-cd Haskell
-ghci
-:l CSVLoader.hs
-:r
