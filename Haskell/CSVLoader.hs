@@ -1,7 +1,9 @@
 module CSVLoader
-(loadCategoryTable,
-names,
-name,
+(CategoryTable,
+Category,
+    
+
+
 numCategories,
 numEntries,
 removeCategory,
@@ -9,6 +11,9 @@ keepEntries,
 removeEntries,
 successColumn,
 tableValue,
+
+loadCategoryTable,
+
 Bin,
 entries,
 response,
@@ -16,7 +21,6 @@ successCount,
 failCount,
 count,
 bins,
-CategoryTable(),
 Example,
 pullExample,
 pullExamples
@@ -31,38 +35,45 @@ import Debug.Trace
 import Distribution.Compat.Prelude (readMaybe)
 import Data.Maybe (isNothing)
 
---An array of categories in the format CategoryTable[category][Examples]
-    --The first row consists of either "True" or "False" except for the first itme which is the category name
-    --The first column consists of unique category names
-type CategoryTable = [[String]]
+--      ~Structure~
+--An array of categories
+    --The first category's responses consists of either "True" or "False"
+data CategoryTable = CategoryTable { results :: Category,
+                                    predictors :: [Category]
+                                    }
 
+predictor :: CategoryTable -> Int -> Category
+predictor ct i = predictors ct !! i
 
-names :: CategoryTable -> [String]
-names = map head
+data Category = Category { continuous :: Bool,
+                question :: String,
+                responses :: [String]
+                } deriving(Show)
 
---The 0th category is the success category
-name :: Int -> CategoryTable -> String
-name i ct = head $ ct !! i
+data Entry = Entry { result :: Bool,
+                    answers :: [String]
+                } deriving(Show)
 
---Does not count the success category
+--      ~Basic methods~
+--Does not count the successCategory
 numCategories :: CategoryTable -> Int
-numCategories ct = length ct - 1
+numCategories = length . predictors
 
 --The "category names" row does not count as an entry
 numEntries :: CategoryTable -> Int
-numEntries = length . tail . head
+numEntries = length . responses . results
 
 removeCategory :: String -> CategoryTable -> CategoryTable
-removeCategory name = filter (\cat -> head cat /= name)
+removeCategory q ct = ct { predictors = filter (\predictor -> question predictor /= q) (predictors ct)}
 
---Entries start at 1 (the 0th entry is the category names row and is always kept)
+--Entries start at 0
 keepEntries :: [Int] -> CategoryTable -> CategoryTable
 keepEntries keepIndices ct = removeEntries removeIndices ct
     where removeIndices = [1..(1 + numEntries ct)] \\ keepIndices
 
---Entries start at 1 (the 0th entry is the category names row)
+--Entries start at 0
 removeEntries :: [Int] -> CategoryTable -> CategoryTable
-removeEntries indices = map (removeIndices indices)
+removeEntries indices ct = ct { predictors = map (\c -> c{responses = removeIndices indices (responses c)}) (predictors ct)}
 
 --Removes the given indices from the list. Indices must be in sorted order.
 removeIndices :: [Int] -> [a] -> [a]
@@ -84,7 +95,7 @@ removeAtIndex n (x:xs)
 
 --Returns the success Column minus its category header
 successColumn :: CategoryTable -> [Bool]
-successColumn ct = map read (tail $ head ct)
+successColumn ct = map read (responses $ results ct)
 
 --Looks at the entire table and returns 
 --  Just False if everything is false
@@ -97,6 +108,14 @@ tableValue ct
     | otherwise = Nothing
     where numTrue = length . filter id $ successColumn ct
 
+
+--map out responses, transpose, map into Entries
+pullEntries :: CategoryTable -> [Entry]
+pullEntries ct = zipWith Entry (successColumn ct) transposedTable
+    where 
+        transposedTable = transpose $ map responses (predictors ct)
+        
+
 --      ~Bin functions~
 data Bin = Bin { entries :: [Int]
                 ,response :: String
@@ -107,15 +126,15 @@ data Bin = Bin { entries :: [Int]
 count :: Bin -> Int
 count b = successCount b + failCount b
 
---Given a column index and category table, return a list of bins
+--Given a category index(starting at 0) and category table, return a list of bins
 bins :: Int -> CategoryTable -> [Bin]
 bins catIndex ct = map snd (toList hashMap)
     where
         hashMap = foldl' insertToHashmap Map.empty kvs
 
-        --Pairs of bin names and success bool
+        --Pairs of response(map key) and bins
         kvs :: [(String, Bin)]
-        kvs = zipWith3 pairKV (tail $ ct !! catIndex) (successColumn ct) [1..] -- (cat responses, success bool, entry index(starting at 1))
+        kvs = zipWith3 pairKV (responses (predictor ct catIndex)) (successColumn ct) [0..] -- (cat responses, success bool, entry index(starting at 0))
 
         pairKV :: String -> Bool -> Int -> (String, Bin)
         pairKV s b i = (s, Bin [i] s (bool 1 0 b) (bool 0 1 b))
@@ -128,7 +147,7 @@ insertToHashmap m (k,v) = insertWith adder k v m
 
 --useless function, delete
 binFromIndex :: Int -> CategoryTable -> [String]
-binFromIndex index = nub . tail . (!! index)
+binFromIndex index ct = nub . responses $ predictor ct index
 
 --If all successes = Just True, if all failures = Just False, else Nothing
 --Precondition: At least 1 success or failure
