@@ -15,7 +15,7 @@ m = do
     putStrLn $ drawTree dt
 
 decisionTreeFromCSV :: IO Node
-decisionTreeFromCSV = CSVLoader.main >>= \cts -> return $ decisionTree (cts, [[]])
+decisionTreeFromCSV = CSVLoader.main >>= \cts -> return $ decisionTree (cts, Nothing)
 
 --DATA TYPES AND PRINTING--
 
@@ -45,38 +45,41 @@ draw (Node n e) = lines (show n) ++ drawSubTrees e
     shift first other = zipWith (++) (first : repeat other)
 
 --DECISION TREE MAIN-
-dt :: CategoryTable -> Node
-dt x = decisionTree (x,[[]])
+dt :: NewCategoryTable -> Node
+dt x = decisionTree (x,Nothing)
 
-decisionTree :: (CategoryTable, CategoryTable) -> Node
-decisionTree (currCT, prevCTS)
-    | null $ successColumn currCT = plurityValue prevCTS
-    | and (successColumn currCT) = Node (Answer True) []
-    | all not (successColumn currCT) = Node (Answer False) []
-    | null $ tail currCT = plurityValue currCT
-    | otherwise = Node (Question $ head bestCategory ++ "?") (map (uncurry edgeCreator) (subsets bestCategoryID currCT))
+decisionTree :: (NewCategoryTable, Maybe NewCategoryTable) -> Node
+decisionTree (currCT, prevCT)
+    | null $ dataPoints $ results currCT = plurityValue $ tryGet prevCT
+    | and $ dataPoints $ results currCT = Node (Answer True) []
+    | all not $ dataPoints $ results currCT = Node (Answer False) []
+    | null $ predictors currCT = plurityValue currCT
+    | otherwise = Node (Question $ question bestCategory ++ "? " ++ divisionLabel bestCategory) $ edgeCreator (subsets currCT bestCategory)
     where
-        plurityValue category = Node (Answer $ mostFrequentItem $ successColumn category) []
-        bestCategory = currCT !! bestCategoryID
-        bestCategoryID = minimumBy (comparing $ remainingEntropy currCT) [1..length currCT - 1]
-        edgeCreator label newCTS = Edge label $ curry decisionTree newCTS prevCTS
+        plurityValue ct = Node (Answer $ mostFrequentItem $ dataPoints $ results ct) []
+        bestCategory = minimumBy (comparing $ remainingEntropy currCT) (predictors currCT)
+        edgeCreator subs = [
+            Edge "Yes" $ curry decisionTree (yesPath subs) $ Just currCT,
+            Edge "No" $ curry decisionTree (noPath subs) $ Just currCT
+            ]
+        tryGet prevCT = case prevCT of
+            Just prevCT -> prevCT
+            Nothing -> error "Not enough data to train tree"
 
-subsets :: Int -> CategoryTable -> [(String,CategoryTable)]
-subsets catID ct = map (\i -> (i, subset ct i cat)) (featuresIn cat)
-    where cat = ct !! catID
+data Subsets = Subsets {yesPath :: NewCategoryTable, noPath :: NewCategoryTable}
+toList :: Subsets -> [NewCategoryTable]
+toList subsets = [yesPath subsets, noPath subsets]
 
-subset :: CategoryTable -> String -> Category -> CategoryTable
-subset ct feature cat = transpose $ head (transpose ct) : map (transpose ct !!) acceptableIDs
+subsets :: NewCategoryTable -> BoolCategory -> Subsets
+subsets ct cat = Subsets (pruneEntriesFromCT acceptableIDs ct) (pruneEntriesFromCT nonAcceptableIds ct)
     where
-        acceptableIDs = filter (\i -> cat !! i == feature) [0..length cat - 1]
-
-featuresIn :: Category -> [String]
-featuresIn cat = nub $ tail cat
+        acceptableIDs = filter (\i -> dataPoints cat !! i) [0..length (dataPoints cat) - 1]
+        nonAcceptableIds = filter (\i -> not $ dataPoints cat !! i) [0..length (dataPoints cat) - 1]
 
 --ENTROPY--
 
-remainingEntropy :: CategoryTable -> Int -> Double
-remainingEntropy ct catID = sum $ map (individualEntropy . snd) (subsets catID ct)
+remainingEntropy :: NewCategoryTable -> BoolCategory -> Double
+remainingEntropy ct cat = sum $ map individualEntropy $ toList $ subsets ct cat
     where
         individualEntropy ct2 = (numEnts ct2/numEnts ct) * entropyOfBool (posExs ct2 / numEnts ct2)
         posExs x = fromIntegral $ posExamples x
@@ -104,12 +107,12 @@ mostFrequentItem (x:xs) = fst $ maximumBy (compare `on` snd) $ map (\y -> (y, co
         count x = length . filter (== x)
 
 -- TESTING --
-test :: Node -> CategoryTable -> (Int,Int)
-test dt ct = (count True (zipWith (==) realAnswers answers), numEntries ct)
-    where
-        answers = map (interrogate dt . zip (headers ct) . (entries ct !!)) [0..numEntries ct - 1]
-        count x = length . filter (==x)
-        realAnswers = successColumn ct
+-- test :: Node -> NewCategoryTable -> (Int,Int)
+-- test dt ct = (count True (zipWith (==) realAnswers answers), numEntries ct)
+--     where
+--         answers = map (interrogate dt . zip (headers ct) . (entries ct !!)) [0..numEntries ct - 1]
+--         count x = length . filter (==x)
+--         realAnswers = successColumn ct
 
 interrogate :: Node -> [(String, String)] -> Bool
 interrogate (Node (Answer a) _) _ = a
@@ -121,13 +124,13 @@ interrogate (Node (Question q) edges) example = interrogate (answerNodeFrom q) e
         answer :: String -> Maybe String
         answer question = Just . snd =<< find ((== question) . fst) example
 
-run :: Int -> IO TestResult
-run sp = do
-    size <- fromIntegral . numEntries <$> loadTrainingSet
-    trainCSV <- trim sp <$> loadTrainingSet
-    testCSV <- trim2 sp <$> loadTrainingSet
-    let d = dt trainCSV
-    return $ uncurry TestResult $ test d testCSV
+-- run :: Int -> IO TestResult
+-- run sp = do
+--     size <- fromIntegral . numEntries <$> loadTrainingSet
+--     trainCSV <- trim sp <$> loadTrainingSet
+--     testCSV <- trim2 sp <$> loadTrainingSet
+--     let d = dt trainCSV
+--     return $ uncurry TestResult $ test d testCSV
 
 data TestResult = TestResult { successes :: Int, total :: Int }
 instance Show TestResult where
@@ -137,11 +140,11 @@ instance Show TestResult where
             p = successes t
             n = total t
 
-a :: IO ()
-a = mapM_ (\p -> run p >>= \result -> putStrLn (show p ++ " | " ++ show result)) [1..14]
+-- a :: IO ()
+-- a = mapM_ (\p -> run p >>= \result -> putStrLn (show p ++ " | " ++ show result)) [1..14]
 
-b sp = do
-    size <- fromIntegral . numEntries <$> main
-    trainCSV <- trim sp <$> loadTrainingSet
-    testCSV <- trim2 sp <$> loadTrainingSet
-    putStrLn $ drawTree $ dt trainCSV
+-- b sp = do
+--     size <- fromIntegral . numEntries <$> main
+--     trainCSV <- trim sp <$> loadTrainingSet
+--     testCSV <- trim2 sp <$> loadTrainingSet
+--     putStrLn $ drawTree $ dt trainCSV

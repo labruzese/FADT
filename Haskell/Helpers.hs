@@ -6,6 +6,9 @@ count x = length . filter (== x)
 mapIndexes :: ((Int, b) -> c) -> [b] -> [c]
 mapIndexes fun a = zipWith (curry fun) [0..length a - 1] a
 
+filterIndexes :: (Int -> Bool) -> [a] -> [a]
+filterIndexes condition list = map fst $ filter (condition . snd) $ zip list [0..length list - 1]
+
 removeFirst :: Eq a => a -> [a] -> [a]
 removeFirst _ [] = []
 removeFirst x (y:ys)
