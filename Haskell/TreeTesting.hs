@@ -26,16 +26,15 @@ safeHead []    = Nothing
 safeHead (x:_) = Just x
 
 --Given an example and decision, checks if the decision matches the example decision
-validateMaybeExample :: Example -> Maybe Bool -> Maybe Bool
-validateMaybeExample ex Nothing = Nothing
-validateMaybeExample ex (Just b) = Just $ validateExample ex b
+validateMaybeEntry :: Entry -> Maybe Bool -> Maybe Bool
+validateMaybeEntry ex Nothing = Nothing
+validateMaybeEntry ex (Just b) = Just $ validateEntry ex b
 
-validateExample :: Example -> Bool -> Bool
-validateExample ex decision = decision == trueResult
-    where trueResult = read $ snd (head ex)
+validateEntry :: Entry -> Bool -> Bool
+validateEntry entry decision = decision == result entry
 
-testExample :: Example -> DecisionTree -> Maybe Bool
-testExample ex dt = validateMaybeExample ex (makeDecision dt ex)
+testEntry :: Entry -> DecisionTree -> Maybe Bool
+testEntry ex dt = validateMaybeEntry ex (makeDecision dt ex)
 
 main :: IO ()
 main = do
@@ -43,15 +42,15 @@ main = do
     ct <- loadCategoryTable "FullWithDecision.csv"
 
     --Build decision tree
-    let dt = decisionTree $ keepEntries [1..20] ct
+    let dt = decisionTree $ keepEntries [0..20] ct
 
     --Print stuff
     putStr . concat $ replicate 10 "\n"
     printTree dt
 
     --Pull examples
-    let examples = pullExamples ct [21..100]
-    let tests = map (\ex -> maybe "Nothing" show (testExample ex dt)) examples
+    let examples = drop 31 (pullEntries ct)
+    let tests = map (\ex -> maybe "Nothing" show (testEntry ex dt)) examples
     print tests
     let numCorrect = length (filter (=="True") tests)
     let totalTests = length tests

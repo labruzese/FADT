@@ -1,29 +1,34 @@
 module CSVLoader
 (CategoryTable,
+results,
+categories,
+mapResults,
+mapCategories,
+category,
 Category,
-    
-
-
+continuous,
+question,
+responses,
+mapResponses,
+Entry,
+result,
+answers,
+mapAnswers,
 numCategories,
 numEntries,
 removeCategory,
 keepEntries,
 removeEntries,
-successColumn,
 tableValue,
-
-loadCategoryTable,
-
+pullEntries,
 Bin,
+count,
 entries,
 response,
 successCount,
 failCount,
-count,
 bins,
-Example,
-pullExample,
-pullExamples
+loadCategoryTable,
 ) where
 
 import System.IO
@@ -34,46 +39,63 @@ import Data.Bool
 import Debug.Trace
 import Distribution.Compat.Prelude (readMaybe)
 import Data.Maybe (isNothing)
+import Language.Haskell.TH.PprLib (cat)
 
 --      ~Structure~
 --An array of categories
     --The first category's responses consists of either "True" or "False"
-data CategoryTable = CategoryTable { results :: Category,
-                                    predictors :: [Category]
-                                    }
+data CategoryTable = CategoryTable { results :: [Bool],
+                                    categories :: [Category]
+                                    } deriving(Show)
 
-predictor :: CategoryTable -> Int -> Category
-predictor ct i = predictors ct !! i
+
+-- Map over results
+mapResults :: (Bool -> a) -> CategoryTable -> [a]
+mapResults f (CategoryTable rs _) = map f rs
+
+-- Map over predictors
+mapCategories :: (Category -> Category) -> CategoryTable -> CategoryTable
+mapCategories f ct = ct{categories = map f (categories ct)}
+
+--Pulls a predictor(category) 
+category :: CategoryTable -> Int -> Category
+category ct i = categories ct !! i
 
 data Category = Category { continuous :: Bool,
                 question :: String,
                 responses :: [String]
                 } deriving(Show)
 
+mapResponses :: (String -> String) -> Category -> Category
+mapResponses f cat = cat{responses = map f (responses cat)}
+
 data Entry = Entry { result :: Bool,
-                    answers :: [String]
+                    answers :: [(String, String)]
                 } deriving(Show)
+
+mapAnswers :: ((String, String) -> (a, a)) -> Entry -> [(a, a)]
+mapAnswers f e = map f (answers e)
 
 --      ~Basic methods~
 --Does not count the successCategory
 numCategories :: CategoryTable -> Int
-numCategories = length . predictors
+numCategories = length . categories
 
 --The "category names" row does not count as an entry
 numEntries :: CategoryTable -> Int
-numEntries = length . responses . results
+numEntries = length . results
 
 removeCategory :: String -> CategoryTable -> CategoryTable
-removeCategory q ct = ct { predictors = filter (\predictor -> question predictor /= q) (predictors ct)}
+removeCategory q ct = ct { categories = filter (\predictor -> question predictor /= q) (categories ct)}
 
 --Entries start at 0
 keepEntries :: [Int] -> CategoryTable -> CategoryTable
 keepEntries keepIndices ct = removeEntries removeIndices ct
-    where removeIndices = [1..(1 + numEntries ct)] \\ keepIndices
+    where removeIndices = [0..(numEntries ct)] \\ keepIndices
 
 --Entries start at 0
 removeEntries :: [Int] -> CategoryTable -> CategoryTable
-removeEntries indices ct = ct { predictors = map (\c -> c{responses = removeIndices indices (responses c)}) (predictors ct)}
+removeEntries indices ct = CategoryTable (removeIndices indices (results ct)) (map (\c -> c{responses = removeIndices indices (responses c)}) (categories ct))
 
 --Removes the given indices from the list. Indices must be in sorted order.
 removeIndices :: [Int] -> [a] -> [a]
@@ -93,10 +115,6 @@ removeAtIndex n (x:xs)
     | n == 0    = xs
     | otherwise = x : removeAtIndex (n-1) xs
 
---Returns the success Column minus its category header
-successColumn :: CategoryTable -> [Bool]
-successColumn ct = map read (responses $ results ct)
-
 --Looks at the entire table and returns 
 --  Just False if everything is false
 --  Just True if everything is true
@@ -106,14 +124,15 @@ tableValue ct
     | numTrue == 0 = Just False
     | numTrue == numEntries ct = Just True
     | otherwise = Nothing
-    where numTrue = length . filter id $ successColumn ct
+    where numTrue = length . filter id $ results ct
 
 
 --map out responses, transpose, map into Entries
 pullEntries :: CategoryTable -> [Entry]
-pullEntries ct = zipWith Entry (successColumn ct) transposedTable
+pullEntries ct = zipWith (\result r -> Entry result (zip questions r)) (results ct) entryResponses
     where 
-        transposedTable = transpose $ map responses (predictors ct)
+        entryResponses = transpose $ map responses (categories ct)
+        questions = map question (categories ct)
         
 
 --      ~Bin functions~
@@ -134,7 +153,7 @@ bins catIndex ct = map snd (toList hashMap)
 
         --Pairs of response(map key) and bins
         kvs :: [(String, Bin)]
-        kvs = zipWith3 pairKV (responses (predictor ct catIndex)) (successColumn ct) [0..] -- (cat responses, success bool, entry index(starting at 0))
+        kvs = zipWith3 pairKV (responses (category ct catIndex)) (results ct) [0..] -- (cat responses, success bool, entry index(starting at 0))
 
         pairKV :: String -> Bool -> Int -> (String, Bin)
         pairKV s b i = (s, Bin [i] s (bool 1 0 b) (bool 0 1 b))
@@ -147,7 +166,7 @@ insertToHashmap m (k,v) = insertWith adder k v m
 
 --useless function, delete
 binFromIndex :: Int -> CategoryTable -> [String]
-binFromIndex index ct = nub . responses $ predictor ct index
+binFromIndex index ct = nub . responses $ category ct index
 
 --If all successes = Just True, if all failures = Just False, else Nothing
 --Precondition: At least 1 success or failure
@@ -161,7 +180,10 @@ binValue _           = Nothing
 loadCategoryTable :: FilePath -> IO CategoryTable
 loadCategoryTable path = do
     content <- readFile path
-    return . formatCategories . formatMissing . transpose $ map (splitOn ',') (lines content)
+    let splitTable = transpose $ map (splitOn ',') (lines content) 
+    let results = map (\g -> gradeComparator g < 1.67) (drop 1 $ head splitTable)
+
+    return . formatCategories . formatMissing $ CategoryTable results (map readCategory (tail splitTable))
 
 splitOn :: Char -> String -> [String]
 splitOn _ [] = []
@@ -169,6 +191,11 @@ splitOn delim xs = case break (== delim) xs of
     (before, []) -> [before]
     (before, _:ys) -> before : splitOn delim ys
 
+readCategory :: [String] -> Category
+readCategory (q:rs) = Category (continuousFromString q) q rs
+
+continuousFromString :: String -> Bool
+continuousFromString q = any (`isInfixOf` q) ["Grade", "Abs+Tardies", "Birth Month", "Siblings", "Level"]
 --      ~Binary expansion~
 
 --      ~Continous data comparators~
@@ -178,16 +205,19 @@ gradeComparator x = charToDouble (head x) + plusMinusAnalysis x
         plusMinusAnalysis x
             | "+" `isInfixOf` x = -0.33
             | "-" `isInfixOf` x = 0.33
+            | otherwise = 0
         charToDouble x
             | x == 'A' = 1.0
             | x == 'B' = 2.0
             | x == 'C' = 3.0
             | x == 'D' = 4.0
             | x == 'F' = 5.0
-            | otherwise = 10.0
+            | otherwise = error "Illegal grade"
 
 birthMonthComparator :: String -> Double
-birthMonthComparator string = (read string + 3) mod 12
+birthMonthComparator string =
+    let month = read string :: Int
+    in fromIntegral ((month + 3) `mod` 12)
 
 classLevelComparator :: String -> Double
 classLevelComparator "Honors" = 1
@@ -210,15 +240,12 @@ missingFilter str = str
 
 --Applies the missing filter
 formatMissing :: CategoryTable -> CategoryTable
-formatMissing = map (map missingFilter)
-
+formatMissing = mapCategories (mapResponses missingFilter)
 
 --      ~Specific Filters~
 --Applies specific filters to each category
 formatCategories :: CategoryTable -> CategoryTable
-formatCategories = map (\cat ->
-    let catName = head cat
-    in catName : map (filterType catName) (drop 1 cat))
+formatCategories = mapCategories (\cat -> mapResponses (filterType (question cat)) cat)
 
 --Gets the specific filters for a category
 filterType :: String -> (String -> String)
@@ -287,21 +314,21 @@ removeSuffix str c
     | c == last str = init str
     | otherwise = str
 
-purgeExampleIf :: CategoryTable -> ([String] -> Bool) -> CategoryTable
-purgeExampleIf ct f = transpose $ head flipped : filter f (tail flipped)
-    where flipped = transpose ct
+-- purgeExampleIf :: CategoryTable -> ([String] -> Bool) -> CategoryTable
+-- purgeExampleIf ct f = transpose $ head flipped : filter f (tail flipped)
+--     where flipped = transpose ct
 
 --      ~Testing examples~
-type Example = [(String, String)] --[(Question, Response)]
+-- type Example = [(String, String)] --[(Question, Response)]
 
 --Examples start at index 1
-pullExample :: CategoryTable -> Int -> Example
-pullExample ct index = zip (head transposedTable) (exampleData transposedTable index)
-    where transposedTable = transpose ct
+-- pullExample :: CategoryTable -> Int -> Example
+-- pullExample ct index = zip (head transposedTable) (exampleData transposedTable index)
+--     where transposedTable = transpose ct
 
-pullExamples :: CategoryTable -> [Int] -> [Example]
-pullExamples ct = map (zip (head transposedTable) . exampleData transposedTable)
-    where transposedTable = transpose ct
+-- pullExamples :: CategoryTable -> [Int] -> [Example]
+-- pullExamples ct = map (zip (head transposedTable) . exampleData transposedTable)
+--     where transposedTable = transpose ct
 
-exampleData :: CategoryTable -> Int -> [String]
-exampleData transposedTable index = transposedTable !! index
+-- exampleData :: CategoryTable -> Int -> [String]
+-- exampleData transposedTable index = transposedTable !! index

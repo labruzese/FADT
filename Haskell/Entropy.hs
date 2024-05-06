@@ -10,20 +10,20 @@ import Data.List ( minimumBy, maximumBy )
 import Data.Function (on)
 import Debug.Trace
 
---Given a category table, returns the index of the column [1..] that has the greatest decrease in entropy
+--Given a category table, returns the index of the column [0..] that has the greatest decrease in entropy
 highestCorrelatedCategory :: CategoryTable -> Int
 highestCorrelatedCategory ct = fst (maximumBy (compare `on` snd) informationGainPerCategory)
     where
         tEntropy = tableEntropy ct
 
-        informationGainPerCategory :: [(Int, Double)] --Int is the category index [1..], Double is the entropy remaining after the test
-        informationGainPerCategory = zip [1..] $ map (\catIndex -> gainRatio tEntropy catIndex ct) $ take (numCategories ct) [1..]
+        informationGainPerCategory :: [(Int, Double)] --Int is the category index [0..], Double is the entropy remaining after the test
+        informationGainPerCategory = zip [0..] $ map (\catIndex -> gainRatio tEntropy catIndex ct) $ take (numCategories ct) [0..]
 
 highestCorrelatedCategoryWithoutGR :: CategoryTable -> Int
 highestCorrelatedCategoryWithoutGR ct = fst (minimumBy (compare `on` snd) entropyPerCategory)
     where
-        entropyPerCategory :: [(Int, Double)] --Int is the category index [1..], Double is the entropy remaining after the test
-        entropyPerCategory = zip [1..] $ map (`entropyRemainingAfterTest` ct) $ take (numCategories ct) [1..]
+        entropyPerCategory :: [(Int, Double)] --Int is the category index [0..], Double is the entropy remaining after the test
+        entropyPerCategory = zip [0..] $ map (`entropyRemainingAfterTest` ct) $ take (numCategories ct) [0..]
 
 gainRatio :: Double -> Int -> CategoryTable -> Double
 gainRatio tableEntropy category table = informationGain tableEntropy category table / splitInfoAfterTest category table
@@ -34,7 +34,7 @@ informationGain tableEntropy category table = tableEntropy - entropyRemainingAft
 tableEntropy :: CategoryTable -> Double
 tableEntropy ct = entropyOfBernoulliVariable $ fromIntegral trueCount / fromIntegral totalCount
     where
-        successCol = successColumn ct
+        successCol = results ct
         trueCount = length $ filter id successCol
         totalCount = length successCol
 

@@ -42,12 +42,12 @@ decisionTreeNodeRecursive ct response
     | numCategories ct == 0 = Node (DTNode response NoDecision) []
     | tValue == Just True = Node (DTNode response (Decision True)) []
     | tValue == Just False = Node (DTNode response (Decision False)) []
-    | otherwise = Node (DTNode response (Question (name hcc ct))) subNodes --Examples are mixed, bin and repeat
+    | otherwise = Node (DTNode response (Question (question (category ct hcc)))) subNodes --Examples are mixed, bin and repeat
     where
         tValue = tableValue ct --trace("\ntvalue: " ++ show (tableValue ct) ++ "     Category table:" ++ show(ct) ++ "\n")
-        hcc = highestCorrelatedCategory ct
+        hcc = highestCorrelatedCategoryWithoutGR ct
         bs = bins hcc ct --trace ("\nbins: " ++ show (bins hcc ct))
-        subTables = map (\bin -> removeCategory (name hcc ct) $ keepEntries (entries bin) ct) bs --bins -> subtables
+        subTables = map (\bin -> removeCategory (question (category ct hcc)) $ keepEntries (entries bin) ct) bs --bins -> subtables
         responses = map (Just . CSVLoader.response) bs
         subNodes = zipWith decisionTreeNodeRecursive subTables responses
 
@@ -61,24 +61,25 @@ printTree = putStrLn . drawTree . fmap show
 
 --      ~Decision making~
 -- Just Bool represents the decision, Nothing represents a failure to make a decision
-makeDecision :: DecisionTree -> Example -> Maybe Bool
-makeDecision tree example = case currNodeValue of   Decision b -> Just b
-                                                    Question s -> case nFromQ s of  Just d -> makeDecision d example
-                                                                                    Nothing -> Nothing
+makeDecision :: DecisionTree -> Entry -> Maybe Bool
+makeDecision tree entry = case currNodeValue of Decision b -> Just b
+                                                Question s -> case nFromQ s of  Just d -> makeDecision d entry
+                                                                                Nothing -> Nothing
+                                                NoDecision -> Nothing
     where
         currNodeValue = value $ rootLabel tree
-        nFromQ = nodeFromQuestion tree example
+        nFromQ = nodeFromQuestion tree entry
         
 
 --Given a question, pulls the response from the example and finds the correct child node
-nodeFromQuestion :: DecisionTree -> Example -> String -> Maybe DecisionTree
-nodeFromQuestion tree example = nodeFromResponse tree . responseFromExample example
+nodeFromQuestion :: DecisionTree -> Entry -> String -> Maybe DecisionTree
+nodeFromQuestion tree entry = nodeFromResponse tree . responseFromExample entry
 
 --Given an example and a question, finds the example's response
-responseFromExample :: Example -> String -> String
-responseFromExample e q = case index of Just i -> snd (e !! i)
-                                        Nothing -> error "Question not found in example"
-    where index = findIndex (\c -> fst c == q) e --Finds the index of the question(category name)
+responseFromExample :: Entry -> String -> String
+responseFromExample entry q = case index of Just i -> snd (answers entry !! i)
+                                            Nothing -> error "Question not found in example"
+    where index = findIndex (\c -> fst c == q) (answers entry) --Finds the index of the question(category name)
 
 --Finds the child node with the given response
 nodeFromResponse :: DecisionTree -> String -> Maybe DecisionTree
