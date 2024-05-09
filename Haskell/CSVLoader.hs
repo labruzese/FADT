@@ -12,8 +12,8 @@ trim2,
 headers,
 entries,
 smallmain,
-NewCategoryTable,
-BoolCategory,
+CategoryTable,
+Category,
 CategoryData,
 Entry,
 question,
@@ -49,14 +49,14 @@ import Data.Sequence (mapWithIndex)
 type StringCategoryTable = [StringCategory]
 type StringCategory = [String]
 
-data NewCategoryTable = NewCategoryTable { results :: BoolCategory, predictors :: [BoolCategory] }
-instance Show NewCategoryTable where
-    show :: NewCategoryTable -> String
+data CategoryTable = CategoryTable { results :: Category, predictors :: [Category] }
+instance Show CategoryTable where
+    show :: CategoryTable -> String
     show c = concatMap (\x -> show x ++ "\n") (results c : predictors c)
 
-data BoolCategory = BoolCategory { question :: String, dataPoints :: CategoryData, isAcceptable :: String -> Bool, divisionLabel :: String }
-instance Show BoolCategory where
-    show :: BoolCategory -> String
+data Category = Category { question :: String, dataPoints :: CategoryData, isAcceptable :: String -> Bool, divisionLabel :: String }
+instance Show Category where
+    show :: Category -> String
     --show c = "CATEGORY{Question: " ++ show (question c) ++ " | DividedBy: " ++ show (divisionLabel c) ++ " | dataPoints: " ++ show (dataPoints c) ++ "}"
     show c = "CATEGORY { Question: " ++ show (question c) ++ " | DividedBy: " ++ show (divisionLabel c) ++ " | dataPoints: " ++ "[...]" ++ " }"
 type CategoryData = [Bool]
@@ -72,19 +72,19 @@ successColumnHeader = "CS Req Grade"
 minimumSuccess :: String
 minimumSuccess = "B"
 
-numCategories :: NewCategoryTable -> Int
+numCategories :: CategoryTable -> Int
 numCategories x = length $ predictors x
 
-numEntries :: NewCategoryTable -> Int
-numEntries = length . entries
+numEntries :: CategoryTable -> Int
+numEntries = length . dataPoints . results
 
 --Loads the CategoryTable from a file path
-loadCategoryTable :: FilePath -> IO NewCategoryTable
+loadCategoryTable :: FilePath -> IO CategoryTable
 loadCategoryTable path = do
     content <- readFile path
     return $ joinToTable . concatMap splitCategory . formatMissing . transpose $ map (splitOn ',') (lines content)
         where
-            joinToTable cats = NewCategoryTable  {results = cats !! indexOfSuccessColumn cats, predictors = predictorsColumns cats}
+            joinToTable cats = CategoryTable  {results = cats !! indexOfSuccessColumn cats, predictors = predictorsColumns cats}
             indexOfSuccessColumn = findFirstMatchingIndex (\x -> question x `isInfixOf` successColumnHeader)
             predictorsColumns cats = take (indexOfSuccessColumn cats) cats ++ drop (indexOfSuccessColumn cats +1) cats
 
@@ -105,10 +105,10 @@ missingFilter str = str
 formatMissing :: StringCategoryTable -> StringCategoryTable
 formatMissing = map (map missingFilter)
 
-splitCategory :: StringCategory -> [BoolCategory]
+splitCategory :: StringCategory -> [Category]
 splitCategory category = map buildCategoryAtSplitPoint $ getPossibleSplitPoints (head category) (tail category)
     where
-        buildCategoryAtSplitPoint (isAcceptableFun, divisionLabelStr) = BoolCategory
+        buildCategoryAtSplitPoint (isAcceptableFun, divisionLabelStr) = Category
             (head category)
             (map isAcceptableFun (tail category))
             isAcceptableFun
@@ -187,36 +187,37 @@ abstComparator = read
 siblingComparator :: String -> Double
 siblingComparator = read
 
-posExamples :: NewCategoryTable -> Int
+posExamples :: CategoryTable -> Int
 posExamples ct = count True $ dataPoints $ results ct
 
-negExamples :: NewCategoryTable -> Int
+negExamples :: CategoryTable -> Int
 negExamples ct = count False $ dataPoints $ results ct
 
 headers :: StringCategoryTable -> [String]
 headers = map head
 
-entries :: NewCategoryTable -> [Entry]
+--this is insanely slow.. consider rewriting
+entries :: CategoryTable -> [Entry]
 entries ct = mapIndexes (\(entryId, entry) -> buildEntry (dataPoints (results ct) !! entryId) entry) $ transpose $
     map (\category -> map (question category,) (dataPoints category)) (predictors ct)
     where
         buildEntry result qAndA = Entry result $ Map.fromList qAndA
 
-pruneEntriesFromCT :: [Int] -> NewCategoryTable -> NewCategoryTable
-pruneEntriesFromCT ids oldCT = NewCategoryTable {
+pruneEntriesFromCT :: [Int] -> CategoryTable -> CategoryTable
+pruneEntriesFromCT ids oldCT = CategoryTable {
     results = editDataPoints (results oldCT) (filterIndexes (`elem` ids) $ dataPoints $ results oldCT),
     predictors = map (\x -> editDataPoints x $ filterIndexes (`elem` ids) (dataPoints x)) (predictors oldCT)
 }
 
 
-trim :: Int -> NewCategoryTable -> NewCategoryTable
-trim sp ct = NewCategoryTable {
+trim :: Int -> CategoryTable -> CategoryTable
+trim sp ct = CategoryTable {
     results = editDataPoints (results ct) (take sp $ dataPoints $ results ct),
     predictors = map (\x -> editDataPoints x $ take sp (dataPoints x)) (predictors ct)
     }
 
-trim2 :: Int -> NewCategoryTable -> NewCategoryTable
-trim2 sp ct = NewCategoryTable {
+trim2 :: Int -> CategoryTable -> CategoryTable
+trim2 sp ct = CategoryTable {
     results = editDataPoints (results ct) (drop sp $ dataPoints $ results ct),
     predictors = map (\x -> editDataPoints x $ drop sp (dataPoints x)) (predictors ct)
     }
@@ -224,11 +225,11 @@ trim2 sp ct = NewCategoryTable {
 trimCategories :: StringCategoryTable -> StringCategoryTable
 trimCategories = take 5
 
-main :: IO NewCategoryTable
+main :: IO CategoryTable
 main = loadCategoryTable "49dtd.csv"
 
-smallmain :: IO NewCategoryTable
+smallmain :: IO CategoryTable
 smallmain = loadCategoryTable "wikiTest.csv"
 
-editDataPoints cat newdps = BoolCategory { question = question cat, dataPoints = newdps, isAcceptable = isAcceptable cat, divisionLabel = divisionLabel cat }
-editQuestion cat newQ = BoolCategory { question = newQ, dataPoints = dataPoints cat, isAcceptable = isAcceptable cat, divisionLabel = divisionLabel cat }
+editDataPoints cat newdps = Category { question = question cat, dataPoints = newdps, isAcceptable = isAcceptable cat, divisionLabel = divisionLabel cat }
+editQuestion cat newQ = Category { question = newQ, dataPoints = dataPoints cat, isAcceptable = isAcceptable cat, divisionLabel = divisionLabel cat }

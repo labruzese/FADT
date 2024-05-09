@@ -1,4 +1,4 @@
-module DecisionTree where
+module DecisionTree() where
 
 import CSVLoader
 import Data.List ( maximumBy, minimumBy, elemIndex, nub, transpose, find )
@@ -44,11 +44,11 @@ draw (Node n e) = lines (show n) ++ drawSubTrees e
 
     shift first other = zipWith (++) (first : repeat other)
 
---DECISION TREE MAIN-
-dt :: NewCategoryTable -> Node
+--DECISION TREE MAIN--
+dt :: CategoryTable -> Node
 dt x = decisionTree (x,Nothing)
 
-decisionTree :: (NewCategoryTable, Maybe NewCategoryTable) -> Node
+decisionTree :: (CategoryTable, Maybe CategoryTable) -> Node
 decisionTree (currCT, prevCT)
     | null $ dataPoints $ results currCT = plurityValue $ tryGet prevCT
     | and $ dataPoints $ results currCT = Node (Answer True) []
@@ -57,7 +57,7 @@ decisionTree (currCT, prevCT)
     | otherwise = Node (Question $ question bestCategory ++ "? " ++ divisionLabel bestCategory) $ edgeCreator (subsets currCT bestCategory)
     where
         plurityValue ct = Node (Answer $ mostFrequentItem $ dataPoints $ results ct) []
-        bestCategory = minimumBy (comparing $ remainingEntropy currCT) (predictors currCT)
+        bestCategory = maximumBy (comparing $ informationGain currCT) (predictors currCT)
         edgeCreator subs = [
             Edge "Yes" $ curry decisionTree (yesPath subs) $ Just currCT,
             Edge "No" $ curry decisionTree (noPath subs) $ Just currCT
@@ -66,29 +66,35 @@ decisionTree (currCT, prevCT)
             Just prevCT -> prevCT
             Nothing -> error "Not enough data to train tree"
 
-data Subsets = Subsets {yesPath :: NewCategoryTable, noPath :: NewCategoryTable}
-toList :: Subsets -> [NewCategoryTable]
+data Subsets = Subsets {yesPath :: CategoryTable, noPath :: CategoryTable} deriving (Show)
+toList :: Subsets -> [CategoryTable]
 toList subsets = [yesPath subsets, noPath subsets]
 
-subsets :: NewCategoryTable -> BoolCategory -> Subsets
+subsets :: CategoryTable -> Category -> Subsets
 subsets ct cat = Subsets (pruneEntriesFromCT acceptableIDs ct) (pruneEntriesFromCT nonAcceptableIds ct)
     where
         acceptableIDs = filter (\i -> dataPoints cat !! i) [0..length (dataPoints cat) - 1]
         nonAcceptableIds = filter (\i -> not $ dataPoints cat !! i) [0..length (dataPoints cat) - 1]
 
 --ENTROPY--
-
-remainingEntropy :: NewCategoryTable -> BoolCategory -> Double
-remainingEntropy ct cat = sum $ map individualEntropy $ toList $ subsets ct cat
-    where
-        individualEntropy ct2 = (numEnts ct2/numEnts ct) * entropyOfBool (posExs ct2 / numEnts ct2)
-        posExs x = fromIntegral $ posExamples x
+informationGain :: CategoryTable -> Category -> Double
+informationGain ct cat = entropy (posRatio ct) - remainingEntropy ct cat
+    where 
+        posRatio x = fromIntegral (posExamples x) / numEnts x
         numEnts x = fromIntegral $ numEntries x
 
-entropyOfBool :: Double -> Double
-entropyOfBool 0 = 0
-entropyOfBool 1 = 0
-entropyOfBool p = -(p * log2 p + q * log2 q)
+remainingEntropy :: CategoryTable -> Category -> Double
+remainingEntropy ct cat = sum $ map individualEntropy $ toList $ subsets ct cat
+    where
+        individualEntropy ct2 = sizeRatio ct2 * entropy (posRatio ct2)
+        sizeRatio x = numEnts x / numEnts ct
+        posRatio x = fromIntegral (posExamples x) / numEnts x
+        numEnts x = fromIntegral $ numEntries x
+
+entropy :: Double -> Double
+entropy 0 = 0
+entropy 1 = 0
+entropy p = -(p * log2 p + q * log2 q)
     where
         q = 1-p
         log2 = logBase 2
