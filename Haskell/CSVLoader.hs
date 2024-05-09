@@ -55,14 +55,16 @@ instance Show CategoryTable where
     show c = concatMap (\x -> show x ++ "\n") (results c : predictors c)
 
 data Category = Category { question :: String, dataPoints :: CategoryData, isAcceptable :: String -> Bool, divisionLabel :: String }
-instance Show Category where
-    show :: Category -> String
-    --show c = "CATEGORY{Question: " ++ show (question c) ++ " | DividedBy: " ++ show (divisionLabel c) ++ " | dataPoints: " ++ show (dataPoints c) ++ "}"
-    show c = "CATEGORY { Question: " ++ show (question c) ++ " | DividedBy: " ++ show (divisionLabel c) ++ " | dataPoints: " ++ "[...]" ++ " }"
+
 type CategoryData = [Bool]
 
 data Entry = Entry { result :: Bool, askQuestion :: Map.Map String Bool} deriving (Show)
 
+
+instance Show Category where
+    show :: Category -> String
+    --show c = "CATEGORY{Question: " ++ show (question c) ++ " | DividedBy: " ++ show (divisionLabel c) ++ " | dataPoints: " ++ show (dataPoints c) ++ "}"
+    show c = "CATEGORY { Question: " ++ show (question c) ++ " | DividedBy: " ++ show (divisionLabel c) ++ " | dataPoints: " ++ "[...]" ++ " }"
 missing :: String
 missing = "N/A"
 
@@ -226,7 +228,7 @@ trimCategories :: StringCategoryTable -> StringCategoryTable
 trimCategories = take 5
 
 main :: IO CategoryTable
-main = loadCategoryTable "49dtd.csv"
+main = loadCategoryTable "dtdDecisions.csv"
 
 smallmain :: IO CategoryTable
 smallmain = loadCategoryTable "wikiTest.csv"

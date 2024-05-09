@@ -84,7 +84,12 @@ informationGain ct cat = entropy (posRatio ct) - remainingEntropy ct cat
         numEnts x = fromIntegral $ numEntries x
 
 remainingEntropy :: CategoryTable -> Category -> Double
-remainingEntropy ct cat = sum $ map individualEntropy $ toList $ subsets ct cat
+remainingEntropy ct cat = 
+    let subs = subsets ct cat in 
+    if numEnts (yesPath subs) == 0 || numEnts (noPath subs) == 0 
+        then entropy (posRatio ct) 
+    else 
+        sum $ map individualEntropy $ toList subs
     where
         individualEntropy ct2 = sizeRatio ct2 * entropy (posRatio ct2)
         sizeRatio x = numEnts x / numEnts ct
