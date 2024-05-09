@@ -18,11 +18,25 @@ import Data.Maybe (fromMaybe)
 
 type DecisionTree = Tree DTNode
 --      ~Tree creation~
+green :: String
+green = "\ESC[32m"
+
+red :: String
+red = "\ESC[31m"
+
+purple :: String
+purple = "\ESC[35m"
+
+clear :: String
+clear = "\ESC[0m"
+
 data DTNodeValue = Question String | Decision Bool | NoDecision deriving (Read)
 instance Show DTNodeValue where
     show :: DTNodeValue -> String
-    show (Question q) = "¿" ++ q ++ "?"
-    show (Decision b) = show b
+    show (Question q) = purple ++ "¿" ++ q ++ "?" ++ clear
+    show (Decision b) = if b
+            then green ++ show b ++ clear  -- Green for True
+            else red ++ show b ++ clear  -- Red for False
     show NoDecision = "No Decision"
 
 type DTResponse = Maybe String
@@ -31,8 +45,8 @@ data DTNode = DTNode { dtResponse :: DTResponse
                 , value :: DTNodeValue
                 } deriving (Read)
 instance Show DTNode where
-    show (DTNode (Just r) v) = "|" ++ r ++ " -> " ++ show v ++ "|  "
-    show (DTNode Nothing v)  = "|root -> " ++ show v ++ "|  "
+    show (DTNode (Just r) v) = r ++ " -> " ++ show v
+    show (DTNode Nothing v) = "root -> " ++ show v
 
 decisionTree :: CategoryTable -> DecisionTree
 decisionTree ct = decisionTreeNodeRecursive ct Nothing

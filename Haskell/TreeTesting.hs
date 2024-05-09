@@ -42,14 +42,15 @@ main = do
     ct <- loadCategoryTable "FullWithDecision.csv"
 
     --Build decision tree
-    let dt = decisionTree $ keepEntries [0..20] ct
+    let x = 20
+    let dt = decisionTree $ keepEntries [0..x] ct
 
     --Print stuff
     putStr . concat $ replicate 10 "\n"
     printTree dt
 
     --Pull examples
-    let examples = drop 31 (pullEntries ct)
+    let examples = drop (x + 1) (pullEntries ct)
     let tests = map (\ex -> maybe "Nothing" show (testEntry ex dt)) examples
     print tests
     let numCorrect = length (filter (=="True") tests)
